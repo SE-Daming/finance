@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>我的理财看板</title>
+  <meta name="description" content="个人理财数据看板：大盘指数、外汇黄金、自选基金，数据来自公开接口">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>我的理财看板</h1>
+      <p class="subtitle" id="update-time">数据加载中…</p>
+    </div>
+    <button id="refresh-btn" class="ghost-btn" type="button">↻ 刷新</button>
+  </header>
+
+  <main class="grid">
+    <section class="card card-wide" id="card-index">
+      <h2>大盘指数</h2>
+      <div class="card-body" data-state="loading"><span class="spinner"></span></div>
+    </section>
+
+    <section class="card" id="card-fx">
+      <h2>外汇 · 贵金属</h2>
+      <div class="card-body" data-state="loading"><span class="spinner"></span></div>
+    </section>
+
+    <section class="card" id="card-watch">
+      <h2>自选基金 / ETF / 股票</h2>
+      <form id="watch-form" class="watch-form">
+        <input id="watch-input" type="text" inputmode="numeric" maxlength="6"
+               placeholder="输入 6 位代码，如 161725、510300、600519" autocomplete="off">
+        <button type="submit">添加</button>
+      </form>
+      <p class="hint">场内品种实时价，代码保存在浏览器本地（localStorage）。示例：161725 白酒基金、510300 沪深300ETF、600519 贵州茅台</p>
+      <div class="card-body" data-state="loading"><span class="spinner"></span></div>
+    </section>
+
+    <section class="card card-placeholder">
+      <h2>资产总览</h2>
+      <div class="placeholder-body">
+        <div class="placeholder-icon">📊</div>
+        <p>总资产 / 收益曲线<br><small>模块占位，待接入个人记账数据</small></p>
+      </div>
+    </section>
+
+    <section class="card card-placeholder">
+      <h2>收支记录</h2>
+      <div class="placeholder-body">
+        <div class="placeholder-icon">🧾</div>
+        <p>月度收支 / 储蓄率<br><small>模块占位，待接入个人记账数据</small></p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>数据来源：腾讯财经公开行情接口，仅供个人参考，不构成投资建议。</p>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

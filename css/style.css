@@ -1,0 +1,196 @@
+:root {
+  --bg: #0e1320;
+  --card: #161d2e;
+  --card-border: #232c42;
+  --text: #e8ecf4;
+  --text-dim: #8a94a8;
+  --accent: #4f8cff;
+  --up: #ff5b5b;    /* 中国习惯：红涨 */
+  --down: #35c47c;  /* 绿跌 */
+  --flat: #8a94a8;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  min-height: 100vh;
+  padding: 24px clamp(12px, 4vw, 40px) 40px;
+}
+
+.topbar {
+  max-width: 1080px;
+  margin: 0 auto 22px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.topbar h1 { font-size: 26px; letter-spacing: 1px; }
+.subtitle { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
+
+.ghost-btn {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all .15s;
+}
+.ghost-btn:hover { color: var(--text); border-color: var(--accent); }
+
+.grid {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 18px;
+  min-height: 180px;
+}
+
+.card-wide { grid-column: span 2; }
+
+.card h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  margin-bottom: 14px;
+}
+
+/* ---- 数据行 ---- */
+.quote-list { display: flex; flex-direction: column; gap: 12px; }
+.quote-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.quote-name { font-size: 15px; }
+.quote-code { color: var(--text-dim); font-size: 12px; margin-left: 6px; }
+
+.quote-price { font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 600; text-align: right; }
+.quote-change { font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; margin-top: 2px; }
+
+.up   { color: var(--up); }
+.down { color: var(--down); }
+.flat { color: var(--flat); }
+
+/* ---- 自选列表 ---- */
+.watch-form { display: flex; gap: 8px; margin-bottom: 6px; }
+.watch-form input {
+  flex: 1;
+  background: #0f1524;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 14px;
+  outline: none;
+}
+.watch-form input:focus { border-color: var(--accent); }
+.watch-form button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0 18px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.watch-form button:hover { filter: brightness(1.1); }
+
+.hint { color: var(--text-dim); font-size: 12px; margin-bottom: 12px; line-height: 1.6; }
+
+.remove-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+}
+.remove-btn:hover { color: var(--up); }
+
+/* ---- 大盘指数卡 ---- */
+.index-row { display: flex; justify-content: space-between; gap: 12px; }
+.index-block { flex: 1; text-align: center; }
+.index-block .quote-name { font-size: 13px; color: var(--text-dim); }
+.index-block .quote-price { font-size: 20px; margin-top: 6px; }
+.spark-label { color: var(--text-dim); font-size: 12px; margin-top: 14px; }
+
+/* ---- 走势图 ---- */
+.spark { width: 100%; height: 64px; display: block; margin-top: 10px; }
+
+/* ---- 占位卡片 ---- */
+.card-placeholder { border-style: dashed; opacity: .85; }
+.placeholder-body {
+  height: calc(100% - 40px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--text-dim);
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.placeholder-icon { font-size: 30px; }
+
+/* ---- 加载/错误状态 ---- */
+.spinner {
+  display: inline-block;
+  width: 22px; height: 22px;
+  border: 2px solid var(--card-border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+[data-state="loading"], [data-state="error"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+[data-state="error"] { flex-direction: column; gap: 10px; }
+.error-retry {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.error-retry:hover { color: var(--text); border-color: var(--accent); }
+
+footer {
+  max-width: 1080px;
+  margin: 26px auto 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.8;
+}
+
+/* ---- 响应式 ---- */
+@media (max-width: 860px) {
+  .grid { grid-template-columns: 1fr; }
+  .card-wide { grid-column: span 1; }
+}
