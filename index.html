@@ -17,6 +17,11 @@
   </header>
 
   <main class="grid">
+    <section class="card card-full" id="card-holdings">
+      <h2>基金持仓</h2>
+      <div class="card-body" data-state="loading"><span class="spinner"></span></div>
+    </section>
+
     <section class="card card-wide" id="card-index">
       <h2>大盘指数</h2>
       <div class="card-body" data-state="loading"><span class="spinner"></span></div>
@@ -27,7 +32,7 @@
       <div class="card-body" data-state="loading"><span class="spinner"></span></div>
     </section>
 
-    <section class="card" id="card-watch">
+    <section class="card card-wide" id="card-watch">
       <h2>自选基金 / ETF / 股票</h2>
       <form id="watch-form" class="watch-form">
         <input id="watch-input" type="text" inputmode="numeric" maxlength="6"
@@ -36,14 +41,6 @@
       </form>
       <p class="hint">场内品种实时价，代码保存在浏览器本地（localStorage）。示例：161725 白酒基金、510300 沪深300ETF、600519 贵州茅台</p>
       <div class="card-body" data-state="loading"><span class="spinner"></span></div>
-    </section>
-
-    <section class="card card-placeholder">
-      <h2>资产总览</h2>
-      <div class="placeholder-body">
-        <div class="placeholder-icon">📊</div>
-        <p>总资产 / 收益曲线<br><small>模块占位，待接入个人记账数据</small></p>
-      </div>
     </section>
 
     <section class="card card-placeholder">

@@ -1,13 +1,15 @@
 :root {
-  --bg: #0e1320;
-  --card: #161d2e;
-  --card-border: #232c42;
-  --text: #e8ecf4;
-  --text-dim: #8a94a8;
-  --accent: #4f8cff;
-  --up: #ff5b5b;    /* 中国习惯：红涨 */
-  --down: #35c47c;  /* 绿跌 */
-  --flat: #8a94a8;
+  --bg: #f4f6fa;
+  --card: #ffffff;
+  --card-border: #e2e7f0;
+  --card-soft: #f8fafd;
+  --text: #1b2333;
+  --text-dim: #6c7891;
+  --accent: #2f6fed;
+  --up: #d92b2b;    /* 中国习惯：红涨 */
+  --down: #12a15e;  /* 绿跌 */
+  --flat: #6c7891;
+  --shadow: 0 1px 2px rgba(20, 30, 60, .04), 0 4px 14px rgba(20, 30, 60, .05);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -33,7 +35,7 @@ body {
 .subtitle { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
 
 .ghost-btn {
-  background: transparent;
+  background: var(--card);
   color: var(--text-dim);
   border: 1px solid var(--card-border);
   border-radius: 8px;
@@ -42,7 +44,7 @@ body {
   font-size: 13px;
   transition: all .15s;
 }
-.ghost-btn:hover { color: var(--text); border-color: var(--accent); }
+.ghost-btn:hover { color: var(--accent); border-color: var(--accent); }
 
 .grid {
   max-width: 1080px;
@@ -58,9 +60,13 @@ body {
   border-radius: 14px;
   padding: 18px;
   min-height: 180px;
+  /* grid 子项默认 min-width:auto，会被明细表的 min-width 撑破，这里允许压到更窄 */
+  min-width: 0;
+  box-shadow: var(--shadow);
 }
 
 .card-wide { grid-column: span 2; }
+.card-full { grid-column: 1 / -1; min-height: 0; }
 
 .card h2 {
   font-size: 14px;
@@ -92,15 +98,16 @@ body {
 .watch-form { display: flex; gap: 8px; margin-bottom: 6px; }
 .watch-form input {
   flex: 1;
-  background: #0f1524;
+  background: var(--card-soft);
   border: 1px solid var(--card-border);
   border-radius: 8px;
   color: var(--text);
   padding: 9px 12px;
   font-size: 14px;
   outline: none;
+  transition: all .15s;
 }
-.watch-form input:focus { border-color: var(--accent); }
+.watch-form input:focus { border-color: var(--accent); background: var(--card); }
 .watch-form button {
   background: var(--accent);
   color: #fff;
@@ -110,7 +117,7 @@ body {
   font-size: 14px;
   cursor: pointer;
 }
-.watch-form button:hover { filter: brightness(1.1); }
+.watch-form button:hover { filter: brightness(1.08); }
 
 .hint { color: var(--text-dim); font-size: 12px; margin-bottom: 12px; line-height: 1.6; }
 
@@ -134,8 +141,300 @@ body {
 /* ---- 走势图 ---- */
 .spark { width: 100%; height: 64px; display: block; margin-top: 10px; }
 
+/* ---- 持仓：顶部总览 ---- */
+.hd-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.hd-stat {
+  background: var(--card-soft);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.hd-stat-label { font-size: 12px; color: var(--text-dim); letter-spacing: .5px; }
+
+.hd-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 6px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.hd-stat-value small { font-size: 12px; font-weight: 400; color: var(--text-dim); margin-left: 4px; }
+
+.hd-note { font-size: 12px; color: var(--text-dim); margin-top: 10px; }
+
+/* ---- 持仓：分类卡片 ---- */
+.hd-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 12px;
+}
+
+.hd-card {
+  background: var(--card-soft);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;   /* 否则卡内文字会把 grid 轨道顶宽，窄屏溢出 */
+}
+
+.hd-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hd-card-cat {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hd-card-code { flex: none; font-size: 11px; color: var(--text-dim); }
+
+.hd-card-name {
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hd-card-amount {
+  font-size: 21px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+  line-height: 1.2;
+}
+
+.hd-card-profit { font-size: 13px; font-variant-numeric: tabular-nums; }
+.hd-card-rate { font-size: 11px; margin-left: 6px; }
+
+.hd-card-meter {
+  height: 5px;
+  border-radius: 3px;
+  background: #e8edf6;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.hd-card-meter span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+.hd-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.hd-card-foot span { white-space: nowrap; }
+
+/* ---- 持仓：分区标题 ---- */
+.hd-section {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  margin: 20px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--card-border);
+}
+
+/* ---- 持仓：收益贡献条 ---- */
+.hd-bars { display: flex; flex-direction: column; gap: 9px; }
+
+.hd-bar-row {
+  display: grid;
+  grid-template-columns: 118px 1fr 132px;
+  align-items: center;
+  gap: 12px;
+}
+
+.hd-bar-name {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hd-bar-track {
+  position: relative;
+  height: 18px;
+  background: var(--card-soft);
+  border-radius: 4px;
+}
+.hd-bar-track::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: 0; bottom: 0;
+  width: 1px;
+  background: var(--card-border);
+}
+
+.hd-bar-fill { position: absolute; top: 3px; bottom: 3px; border-radius: 3px; }
+.hd-bar-fill.up   { background: var(--up); }
+.hd-bar-fill.down { background: var(--down); }
+.hd-bar-fill.flat { background: var(--flat); }
+
+.hd-bar-val {
+  font-size: 13px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.hd-rate { font-size: 11px; margin-left: 6px; }
+
+/* ---- 持仓：仓位分布 ---- */
+.hd-alloc-bar {
+  display: flex;
+  height: 22px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+}
+.hd-alloc-bar span { display: block; height: 100%; }
+
+.hd-alloc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.hd-alloc-item { display: inline-flex; align-items: center; gap: 6px; }
+.hd-alloc-item i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.hd-alloc-item b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.hd-alloc-item em { font-style: normal; font-size: 11px; opacity: .75; }
+
+.hd-dca-bar { margin-top: 12px; }
+
+/* ---- 持仓明细表 ---- */
+.table-wrap { overflow-x: auto; margin: 0 -4px; }
+
+.holdings-table {
+  width: 100%;
+  min-width: 1044px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.holdings-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .5px;
+  color: var(--text-dim);
+  background: var(--card-soft);
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--card-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.holdings-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #eef1f7;
+  vertical-align: top;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+
+.holdings-table .hd-num,
+.holdings-table th.hd-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* 计算出来的列给个淡底，和在 md 里手写的列区分开 */
+.holdings-table .hd-computed { background: rgba(47, 111, 237, .05); }
+.holdings-table .hd-computed.up { background: rgba(217, 43, 43, .07); }
+.holdings-table .hd-computed.down { background: rgba(18, 161, 94, .07); }
+
+/* 推算出来的数字（市值由本金推算、收益由收益率反推），和手写的区分开 */
+.holdings-table td.hd-derived {
+  color: var(--text-dim);
+  border-bottom: 1px dashed var(--card-border);
+}
+/* 推算出来的收益仍然按涨跌上色，只保留虚线下划线作提示 */
+.holdings-table td.hd-derived.up   { color: var(--up); }
+.holdings-table td.hd-derived.down { color: var(--down); }
+
+.holdings-table td:first-child { font-weight: 600; }
+
+.holdings-table tbody tr:hover { background: var(--card-soft); }
+
+/* 纯定投计划行：不是真实持仓，压暗一档免得看错 */
+.holdings-table tr.hd-plan-row td { color: var(--text-dim); }
+
+/* 分类小计行：比末尾的合计行轻一档，只用来分隔分组 */
+.holdings-table .hd-subtotal,
+.holdings-table .hd-subtotal:hover { background: var(--card-soft); }
+.holdings-table .hd-subtotal td {
+  font-weight: 600;
+  border-top: 1px solid var(--card-border);
+}
+
+.holdings-table .total-row,
+.holdings-table .total-row:hover { background: var(--card-soft); }
+.holdings-table .total-row td {
+  font-weight: 700;
+  border-top: 2px solid var(--card-border);
+  border-bottom: none;
+}
+
+/* ---- 持仓：基金区间收益 ---- */
+/* 固定「类别」和六个数字列，基金名那一列不写宽度去吸收剩余空间：
+ * 数字列不定宽的话窄屏会被压到放不下「+14.80%」而截断，
+ * 而名字列定宽的话宽屏上白留一片空白、长名字照样截断 */
+.returns-table {
+  width: 100%;
+  min-width: 800px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.returns-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .5px;
+  color: var(--text-dim);
+  background: var(--card-soft);
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--card-border);
+  white-space: nowrap;
+}
+.returns-table th:first-child { width: 92px; }
+.returns-table th:nth-child(n+3) { width: 78px; }
+
+.returns-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #eef1f7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.returns-table .hd-num { text-align: right; font-variant-numeric: tabular-nums; }
+.returns-table td:first-child { font-weight: 600; }
+.returns-table tbody tr:hover { background: var(--card-soft); }
+
 /* ---- 占位卡片 ---- */
-.card-placeholder { border-style: dashed; opacity: .85; }
+.card-placeholder { border-style: dashed; }
 .placeholder-body {
   height: calc(100% - 40px);
   display: flex;
@@ -171,14 +470,14 @@ body {
 }
 [data-state="error"] { flex-direction: column; gap: 10px; }
 .error-retry {
-  background: transparent;
+  background: var(--card);
   border: 1px solid var(--card-border);
   color: var(--text-dim);
   border-radius: 6px;
   padding: 5px 12px;
   cursor: pointer;
 }
-.error-retry:hover { color: var(--text); border-color: var(--accent); }
+.error-retry:hover { color: var(--accent); border-color: var(--accent); }
 
 footer {
   max-width: 1080px;
@@ -192,5 +491,18 @@ footer {
 /* ---- 响应式 ---- */
 @media (max-width: 860px) {
   .grid { grid-template-columns: 1fr; }
-  .card-wide { grid-column: span 1; }
+  .card-wide, .card-full { grid-column: span 1; }
+  .hd-stat-value { font-size: 19px; }
+  .hd-bar-row { grid-template-columns: 84px 1fr 108px; gap: 8px; }
+  .hd-cards { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .hd-overview { grid-template-columns: repeat(2, 1fr); }
+  .hd-stat-value { font-size: 17px; }
+  .hd-bar-row { grid-template-columns: 72px 1fr 92px; }
+  .hd-rate { display: none; }
+  .hd-cards { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .hd-card { padding: 10px 12px; }
+  .hd-card-amount { font-size: 18px; }
 }
