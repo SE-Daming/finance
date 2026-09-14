@@ -285,11 +285,21 @@
     return -1;
   }
 
+  /* 推算持仓：tools/update-returns.mjs 以 holdings.md 的「快照日期」为锚，用净值 +
+   * 每日定投计划算出今天的市值/成本/收益。有推算值就用它，表里写的快照退居锚点 */
+  function projOf(derived, code) {
+    var c = String(code == null ? '' : code).trim();
+    if (!/^\d{6}$/.test(c)) return null;
+    var f = derived && derived.funds && derived.funds[c];
+    return (f && f.projected) || null;
+  }
+
   /* 汇总模型
    * funds  —— 表里的每一只基金
    * groups —— 按「类别」汇总出来的分类（仓位分布 / 收益贡献 / 定投节奏都看它）
-   * 只填了「每日定投金额」、没填金额和收益的行，当成纯定投计划行：只进定投合计 */
-  function buildModel(tbl) {
+   * 只填了「每日定投金额」、没填金额和收益的行，当成纯定投计划行：只进定投合计
+   * 传了 derived（returns.json）时，有推算持仓的行用推算值替换表里的快照 */
+  function buildModel(tbl, derived) {
     var ci = colIndex(tbl.header);
     var funds = [], groups = [], groupOf = {}, excluded = [];
     var sum = { amount: 0, profit: 0, cost: 0, daily: 0 };
@@ -301,6 +311,7 @@
       var x = metrics(row, ci);
       var daily = parseDaily(cellOf(row, ci.daily));
       var isPlan = x.amount == null && x.profit == null && daily != null;
+      var proj = isPlan ? null : projOf(derived, cellOf(row, ci.code));
 
       var fund = {
         raw: row,
@@ -316,8 +327,19 @@
         cost: x.cost,
         rate: x.rate,
         derivedProfit: x.derivedProfit,
+        projected: false,
         isPlan: isPlan
       };
+
+      if (proj) {
+        fund.amount = proj.amount;
+        fund.profit = proj.profit;
+        fund.cost = proj.cost;
+        fund.rate = proj.rate;
+        fund.projected = true;
+        fund.derivedProfit = false;             // 已经不是从表里的收益率反推的了
+        if (proj.cumulative != null) fund.cumulative = proj.cumulative;
+      }
       funds.push(fund);
 
       var g = groupOf[cat];
@@ -333,11 +355,14 @@
       g.funds.push(fund);
       if (daily != null) g.daily += daily;
       if (fund.cumulative != null) g.cumulative += fund.cumulative;
-      if (x.capital != null) g.capital += x.capital;
+      if (fund.capital != null) g.capital += fund.capital;
 
-      if (x.amount != null) {
-        g.amount += x.amount;
-        if (x.profit != null) { g.profit += x.profit; g.cost += x.amount - x.profit; }
+      if (fund.amount != null) {
+        g.amount += fund.amount;
+        if (fund.profit != null) {
+          g.profit += fund.profit;
+          g.cost += fund.cost != null ? fund.cost : fund.amount - fund.profit;
+        }
       } else if (!isPlan) {
         excluded.push(cat);                     // 既没市值也没本金 → 不计入总额
       }
@@ -362,8 +387,8 @@
     };
   }
 
-  /* 顶部四个数字 */
-  function renderOverview(m) {
+  /* 顶部五个数字 */
+  function renderOverview(m, derived) {
     var s = m.sum;
     var stats = [
       { label: '持有金额', value: fmtMoney(s.amount), cls: '' },
@@ -387,7 +412,16 @@
         '（该行既没填持有金额，也没有投入本金）</p>'
       : '';
 
-    return '<div class="hd-overview">' + html + '</div>' + note;
+    /* 有推算持仓时，上面这几个数字都不是表里写的快照了，必须说清楚 */
+    var pj = derived && derived.projection;
+    var projNote = pj
+      ? '<p class="hd-note">市值 / 成本 / 收益按 <b>快照日期 ' + esc(pj.snapshotDate) +
+        '</b> 的数字，加每日定投计划、用基金每日净值推算到 <b>' + esc(pj.asOf) +
+        '</b>，不是实时持仓。跑偏了就从基金 App 复制一份新数字，覆盖 ' +
+        '<code>data/holdings.md</code> 的表格，再把那里的「快照日期」改成你复制的那一天。</p>'
+      : '';
+
+    return '<div class="hd-overview">' + html + '</div>' + note + projNote;
   }
 
   /* 持仓概览：每个类别一张小卡，一眼看清市值 / 盈亏 / 占比 / 定投 */
@@ -564,30 +598,44 @@
       return '<th' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '>' + esc(c.title) + '</th>';
     }).join('') + '</tr>';
 
-    /* 一只基金一行；同一类别的后续行不再重复类别名 */
+    /* 一只基金一行；同一类别的后续行不再重复类别名
+     * 「持有金额」「持有收益」「累计定投」三列优先用模型里的值——有推算持仓时那是
+     * 滚到今天的数，表里写的只是锚点；没有推算值时，表里写了数字就原样显示 */
     function fundRow(f, first) {
+      function td(c, text, extraCls, title) {
+        var cls = [numCls(c.title)].concat(extraCls || []).filter(Boolean);
+        return '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') +
+          (title ? ' title="' + title + '"' : '') + '>' + text + '</td>';
+      }
+
       var tds = cols.map(function (c) {
         if (c.cost || c.rate) return computed(c.cost ? f.cost : f.rate, !!c.rate);
 
         if (c.src === ci.cat && !first) return '<td class="hd-grp-name"></td>';
 
-        var cls = [numCls(c.title)];
         var val = cellOf(f.raw, c.src);
 
-        if (c.src === ci.amount && num(val) == null && f.amount != null) {
-          return '<td class="hd-num hd-derived" title="由「投入本金 + 持有收益」推算">' +
-            fmtMoney(f.amount) + '</td>';
-        }
-        if (c.src === ci.profit) {
+        if (c.src === ci.amount) {
+          if (f.projected) return td(c, f.amount == null ? '—' : fmtMoney(f.amount));
+          if (num(val) == null && f.amount != null) {
+            return td(c, fmtMoney(f.amount), ['hd-num', 'hd-derived'],
+              '由「投入本金 + 持有收益」推算');
+          }
+        } else if (c.src === ci.cumulative) {
+          if (f.projected && f.cumulative != null) return td(c, fmtMoney(f.cumulative));
+        } else if (c.src === ci.profit) {
+          if (f.projected) {
+            return td(c, f.profit == null ? '—' : fmtSigned(f.profit), [clsOf(f.profit)]);
+          }
           var p = num(val);
           if (p == null && f.derivedProfit && f.profit != null) {
-            return '<td class="hd-num hd-derived ' + clsOf(f.profit) +
-              '" title="由「持有金额 × 持仓收益率」反推">' + fmtSigned(f.profit) + '</td>';
+            return td(c, fmtSigned(f.profit), [clsOf(f.profit), 'hd-derived'],
+              '由「持有金额 × 持仓收益率」反推');
           }
-          if (p != null) cls.push(clsOf(p));
+          if (p != null) return td(c, esc(val), [clsOf(p)]);
         }
-        cls = cls.filter(Boolean);
-        return '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '>' + esc(val) + '</td>';
+
+        return td(c, esc(val));
       }).join('');
       return '<tr class="hd-fund-row' + (f.isPlan ? ' hd-plan-row' : '') + '">' + tds + '</tr>';
     }
@@ -677,8 +725,8 @@
   }
 
   function renderHoldings(tbl, returns) {
-    var m = buildModel(tbl);
-    return renderOverview(m) + renderCards(m) + renderAlloc(m) +
+    var m = buildModel(tbl, returns);
+    return renderOverview(m, returns) + renderCards(m) + renderAlloc(m) +
       renderBars(m) + renderDca(m) + renderReturns(m, returns) + renderTable(tbl, m);
   }
 
