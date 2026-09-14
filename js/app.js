@@ -924,6 +924,11 @@
     });
   }
 
+  /* 一秒以下写成「0 秒」看着像没干活，所以分档 */
+  function fmtDur(ms) {
+    return ms < 1000 ? Math.round(ms) + ' 毫秒' : (ms / 1000).toFixed(1) + ' 秒';
+  }
+
   function readSyncCache(hash) {
     try {
       var c = JSON.parse(localStorage.getItem(SYNC_KEY));
@@ -1066,7 +1071,7 @@
         setSyncStatus('同步完成，但 ' + res.failed.length + ' 只没取到：' +
           res.failed.map(function (f) { return f.code; }).join('、'), 'bad');
       } else {
-        setSyncStatus('刚刚同步 · ' + Math.round(payload.sync.ms / 1000) + ' 秒', '');
+        setSyncStatus('刚刚同步 · ' + fmtDur(payload.sync.ms), '');
       }
     }).catch(function (err) {
       setSyncStatus('同步失败：' + err.message, 'bad');
