@@ -23,24 +23,37 @@
 
   /* 持仓数据源：改 data/holdings.md 即可，无需动代码 */
   var HOLDINGS_URL = 'data/holdings.md';
-  /* 区间收益：由 tools/update-returns.mjs 预生成的小 JSON，页面不直接拉净值 */
+  /* 区间收益 + 推算持仓：仓库里预生成的一份，首屏直接有得看 */
   var RETURNS_URL = 'data/returns.json';
+  /* 基金净值：天天基金，每只一个 <script>，执行后净值挂在全局变量上 */
+  var NAV_URL = 'https://fund.eastmoney.com/pingzhongdata/';
 
   /* ---------- 底层：脚本注入（无跨域） ---------- */
 
-  function injectScript(url, charset, timeoutMs) {
+  /* capture 在脚本 onload 里**同步**执行，用来把全局变量当场取走。
+   * 必须同步：onload 和脚本执行在同一个任务里，中间插不进别的脚本；晚一步
+   * （比如放到 .then 里）就可能读到下一只基金覆盖上去的值 */
+  function injectScript(url, charset, timeoutMs, capture) {
     return new Promise(function (resolve, reject) {
       var s = document.createElement('script');
       if (charset) s.charset = charset;
       var done = false;
       var timer = setTimeout(function () {
-        if (!done) { done = true; s.remove(); reject(new Error('请求超时')); }
+        if (done) return;
+        done = true; s.remove(); reject(new Error('请求超时'));
       }, timeoutMs || 8000);
       s.onload = function () {
-        if (!done) { done = true; clearTimeout(timer); s.remove(); resolve(); }
+        if (done) return;
+        done = true; clearTimeout(timer);
+        var box = {};
+        try { box.value = capture ? capture() : undefined; }
+        catch (e) { box.error = e; }
+        s.remove();
+        if (box.error) reject(box.error); else resolve(box.value);
       };
       s.onerror = function () {
-        if (!done) { done = true; clearTimeout(timer); s.remove(); reject(new Error('网络请求失败')); }
+        if (done) return;
+        done = true; clearTimeout(timer); s.remove(); reject(new Error('网络请求失败'));
       };
       s.src = url;
       document.head.appendChild(s);
@@ -212,33 +225,14 @@
 
   function cellOf(row, i) { return i < 0 || row[i] == null ? '' : row[i]; }
 
-  /* 一行的四个数：市值 / 收益 / 成本 / 收益率
-   * 市值优先取「持有金额」；只填了「投入本金」+「持有收益」时反推市值 = 本金 + 收益 */
+  /* 一行的四个数：市值 / 收益 / 成本 / 收益率。规则在 NavMath.snapshotOf 里，
+   * 和 Node 那边（tools/update-returns.mjs）共用同一份——页面显示的市值、推算持仓
+   * 的起点都从这里来，两边算得不一样就全乱了 */
   function metrics(row, ci) {
-    var profit = num(cellOf(row, ci.profit));
-    var capital = num(cellOf(row, ci.capital));
-    var amount = num(cellOf(row, ci.amount));
-    var derivedProfit = false;
-
-    /* 只填了「持仓收益率」、没填「持有收益」的行：由市值反推收益
-     * 收益 = 市值 × r ÷ (1 + r)，也就是先拿 成本 = 市值 ÷ (1 + r) */
-    if (profit == null && amount != null) {
-      var rIn = num(cellOf(row, ci.rateIn));
-      var pct = rIn == null ? null : rIn / 100;
-      if (pct != null && pct !== -1) {          // -100% 时分母为 0，反推不出来
-        profit = amount - amount / (1 + pct);
-        derivedProfit = true;
-      }
-    }
-
-    if (amount == null && capital != null && profit != null) amount = capital + profit;
-
-    var cost = (amount != null && profit != null) ? amount - profit : capital;
-    var rate = (cost == null || cost === 0 || profit == null) ? null : profit / cost;
-    return {
-      amount: amount, profit: profit, capital: capital,
-      cost: cost, rate: rate, derivedProfit: derivedProfit
-    };
+    return NavMath.snapshotOf(
+      num(cellOf(row, ci.amount)), num(cellOf(row, ci.profit)),
+      num(cellOf(row, ci.capital)), num(cellOf(row, ci.rateIn))
+    );
   }
 
   /* 取文档里所有 markdown 表：[{ header: [...], rows: [[...], ...] }, ...] */
@@ -701,7 +695,10 @@
         var r = /^\d{6}$/.test(code) ? byCode[code] : null;
         if (!r) return;                      // 没代码 / 没取到净值 → 不出现，也不占位
         shown++;
-        rows += '<tr title="净值日期 ' + esc(r.navDate || '—') + '">' +
+        /* 悬停能看见接口认的是哪只基金——代码填错时会取到别人的净值，这是唯一能当场发现的地方 */
+        var tip = '净值日期 ' + (r.navDate || '—') +
+          (r.name && r.name !== f.name ? ' · 接口返回：' + r.name : '');
+        rows += '<tr title="' + esc(tip) + '">' +
           '<td class="hd-grp-name">' + (first ? esc(g.cat) : '') + '</td>' +
           '<td class="rt-name" title="' + esc(f.name) + '">' + esc(f.name) + '</td>' +
           RETURN_COLS.map(function (c) { return returnCell(r[c.key]); }).join('') +
@@ -716,12 +713,16 @@
       RETURN_COLS.map(function (c) { return '<th class="hd-num">' + c.label + '</th>'; }).join('') +
       '</tr>';
 
+    /* 说清楚这块数字是哪来的：现算的、还是仓库里那份预生成的 */
+    var src = data.sync
+      ? '本区块是 ' + fmtWhen(data.sync.at) + ' 点「同步净值」时现算的'
+      : '本区块是仓库里预生成的一份，点右上角「同步净值」可以拉到最新的';
+
     return '<div class="hd-section">基金区间收益 · 截至 ' + esc(data.asOf || '—') + '</div>' +
       '<div class="table-wrap"><table class="returns-table">' +
       '<thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>' +
       '<p class="hd-note">按官方日涨跌幅逐日复利，已含分红再投。QDII 净值晚一天，' +
-      '每行悬停可看自己的净值日期；本区块由 <code>node tools/update-returns.mjs</code> ' +
-      '预生成，不是实时行情。</p>';
+      '每行悬停可看自己的净值日期。' + src + '，不是实时行情。</p>';
   }
 
   function renderHoldings(tbl, returns) {
@@ -850,23 +851,230 @@
 
   /* ---------- 基金持仓 ---------- */
 
+  var holdings = { md: '', tbl: null, snapshotDate: null, derived: null, syncing: false };
+
+  function fetchMd() {
+    return fetch(HOLDINGS_URL, { cache: 'no-cache' }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.text();
+    });
+  }
+
+  /* 「快照日期：2026-09-13」——整行匹配，免得正文里提到也命中 */
+  var SNAPSHOT_RE = /^\s*快照日期[：:]\s*(\d{4}-\d{2}-\d{2})\s*$/m;
+
+  function paintHoldings() {
+    var el = document.querySelector('#card-holdings .card-body');
+    el.innerHTML = renderHoldings(holdings.tbl, holdings.derived);
+    el.dataset.state = 'ok';
+  }
+
   loaders['card-holdings'] = function (el) {
     return Promise.all([
-      fetch(HOLDINGS_URL, { cache: 'no-cache' }).then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.text();
-      }),
-      /* 区间收益是预生成的，缺文件或格式坏了都只该少一个区块，不该拖垮整张持仓卡 */
+      fetchMd(),
+      /* 区间收益缺文件或格式坏了只该少一个区块，不该拖垮整张持仓卡 */
       fetch(RETURNS_URL, { cache: 'no-cache' })
         .then(function (res) { return res.ok ? res.json() : null; })
         .catch(function () { return null; })
     ]).then(function (results) {
-      var tbl = pickHoldingsTable(results[0]);
+      var md = results[0];
+      if (!md) throw new Error('持仓文件读取失败');
+
+      var tbl = pickHoldingsTable(md);
       if (!tbl.rows.length) throw new Error('没找到持仓表格');
-      el.innerHTML = renderHoldings(tbl, results[1]);
-      el.dataset.state = 'ok';
+
+      holdings.md = md;
+      holdings.tbl = tbl;
+      holdings.snapshotDate = (md.match(SNAPSHOT_RE) || [])[1] || null;
+
+      /* 上次同步的结果优先：它比仓库里那份新。持仓表改过（比如换了新快照）就作废，
+       * 否则会拿旧快照的数去滚 */
+      var cached = readSyncCache(hashStr(md));
+      holdings.derived = cached ? cached.data : results[1];
+      paintHoldings();
+      setSyncStatus(cached
+        ? '上次同步 ' + fmtWhen(cached.at)
+        : (holdings.derived ? '预生成数据' : ''), '');
     });
   };
+
+  /* ---------- 同步净值 ----------
+   *
+   * 净值走 <script> 注入：pingzhongdata 是个普通脚本，执行完把净值挂在全局变量上，
+   * 注入天然没有跨域问题——不用 CORS、不用代理、不用服务端配合，浏览器自己就能算。
+   * 代价是每只基金整包 100~550 KB、二十多只合计好几 MB，所以只在点按钮时拉一次，
+   * 结果存 localStorage，之后打开页面直接用缓存。
+   */
+
+  var SYNC_KEY = 'finance-nav-sync';
+  /* 一次拉几只。二十多只并发全开会把连接占满，太贪反而慢 */
+  var SYNC_CONCURRENCY = 4;
+  var NAV_RETRIES = 2;
+
+  /* 持仓表的哈希。表一变（换了新快照、加了基金）同步缓存就作废 */
+  function hashStr(s) {
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return String(h);
+  }
+
+  function fmtWhen(ms) {
+    return new Date(ms).toLocaleString('zh-CN', {
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+    });
+  }
+
+  function readSyncCache(hash) {
+    try {
+      var c = JSON.parse(localStorage.getItem(SYNC_KEY));
+      /* asOf 有值才认：一次都没成功的同步会写出 funds 为空的缓存，那种不如不要 */
+      if (c && c.hash === hash && c.at && c.data && c.data.asOf && c.data.funds) return c;
+    } catch (e) { /* 缓存坏了就当没有 */ }
+    return null;
+  }
+
+  function setSyncStatus(text, cls) {
+    var el = document.getElementById('sync-status');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'hd-sync' + (cls ? ' ' + cls : '');
+  }
+
+  /* 拉一只基金的净值。文件名就是 6 位代码，执行后：
+   *   Data_netWorthTrend 净值走势  fS_name 基金全名  fS_code 代码 */
+  function loadTrend(code) {
+    return injectScript(NAV_URL + code + '.js', null, 20000, function () {
+      var raw = window.Data_netWorthTrend;
+      var name = window.fS_name;
+      var got = window.fS_code;
+      /* 取到就立刻把引用置空：一只一千多个净值点，二十多只全挂在 window 上太占内存。
+       * 注意只能置 null 不能 delete——脚本里是 var 声明的，属性不可配置，严格模式下
+       * delete 会直接抛 TypeError */
+      window.Data_netWorthTrend = null;
+      window.fS_name = null;
+      window.fS_code = null;
+      /* 万一注入的脚本互相踩了（理论上不会），至少能当场发现，而不是把别家的净值当自己的算 */
+      if (String(got) !== code) throw new Error('返回的是 ' + (got || '别的东西') + '，不是 ' + code);
+      return { name: name || '', trend: NavMath.normalizeTrend(raw) };
+    });
+  }
+
+  function loadTrendRetry(code, tries) {
+    return loadTrend(code).catch(function (err) {
+      if (tries <= 1) throw err;
+      return new Promise(function (r) { setTimeout(r, 700); })
+        .then(function () { return loadTrendRetry(code, tries - 1); });
+    });
+  }
+
+  /* 并发数受限地拉一批，返回 { trends: {code: {...}}, failed: [{code, msg}] } */
+  function loadTrends(codes, onProgress) {
+    var trends = {}, failed = [];
+    var next = 0, done = 0;
+
+    function worker() {
+      if (next >= codes.length) return Promise.resolve();
+      var code = codes[next++];
+      return loadTrendRetry(code, NAV_RETRIES).then(function (t) {
+        trends[code] = t;
+      }, function (err) {
+        failed.push({ code: code, msg: err.message });
+      }).then(function () {
+        done++;
+        if (onProgress) onProgress(done, codes.length);
+        return worker();
+      });
+    }
+
+    var n = Math.min(SYNC_CONCURRENCY, codes.length);
+    var running = [];
+    for (var i = 0; i < n; i++) running.push(worker());
+    return Promise.all(running).then(function () {
+      return { trends: trends, failed: failed };
+    });
+  }
+
+  /* 持仓表 → 待同步的基金清单。和 tools/update-returns.mjs 读的是同一批：
+   * 有 6 位代码的行都算，不管表里有没有填金额 */
+  function fundEntries(tbl) {
+    var ci = colIndex(tbl.header);
+    var out = [], seen = {};
+    tbl.rows.forEach(function (row) {
+      var code = String(cellOf(row, ci.code)).trim();
+      if (!/^\d{6}$/.test(code) || seen[code]) return;
+      seen[code] = true;
+      var x = metrics(row, ci);
+      out.push({
+        code: code,
+        name: cellOf(row, ci.name),
+        amount: x.amount, cost: x.cost,
+        daily: parseDaily(cellOf(row, ci.daily)) || 0,
+        cumulative: num(cellOf(row, ci.cumulative))
+      });
+    });
+    return out;
+  }
+
+  function syncNav() {
+    if (holdings.syncing || !holdings.tbl) return;
+
+    var entries = fundEntries(holdings.tbl);
+    if (!entries.length) { setSyncStatus('表里没有 6 位基金代码', 'bad'); return; }
+
+    holdings.syncing = true;
+    var btn = document.getElementById('sync-btn');
+    btn.disabled = true;
+    var t0 = Date.now();
+    setSyncStatus('同步中 0/' + entries.length, 'busy');
+
+    loadTrends(entries.map(function (e) { return e.code; }), function (done, total) {
+      setSyncStatus('同步中 ' + done + '/' + total, 'busy');
+    }).then(function (res) {
+      var ok = entries.filter(function (e) { return res.trends[e.code]; })
+        .map(function (e) {
+          var t = res.trends[e.code];
+          return {
+            code: e.code,
+            name: t.name || e.name,      // 接口给的全名，留着核对代码有没有写错
+            trend: t.trend,
+            amount: e.amount, cost: e.cost, daily: e.daily, cumulative: e.cumulative
+          };
+        });
+
+      /* 一只都没成功：什么都别动。空结果覆盖上去会把现有的数全抹掉，比不同步还糟 */
+      if (!ok.length) {
+        setSyncStatus('同步失败：' + entries.length + ' 只都没取到净值（' +
+          (res.failed[0] ? res.failed[0].msg : '') + '）', 'bad');
+        return;
+      }
+
+      /* 宁缺毋滥只对无人值守的定时任务成立。这里是用户等着看的，二十多只拉到十九只
+       * 也要把十九只摆出来，缺了谁明确写出来就行——但绝不静默 */
+      var payload = NavMath.buildPayload(ok, holdings.snapshotDate);
+      payload.sync = { at: Date.now(), ms: Date.now() - t0, failed: res.failed };
+
+      holdings.derived = payload;
+      try {
+        localStorage.setItem(SYNC_KEY, JSON.stringify({
+          hash: hashStr(holdings.md), at: payload.sync.at, data: payload
+        }));
+      } catch (e) { /* 存不下就算了（比如隐私模式），本次照样能用 */ }
+
+      paintHoldings();
+
+      if (res.failed.length) {
+        setSyncStatus('同步完成，但 ' + res.failed.length + ' 只没取到：' +
+          res.failed.map(function (f) { return f.code; }).join('、'), 'bad');
+      } else {
+        setSyncStatus('刚刚同步 · ' + Math.round(payload.sync.ms / 1000) + ' 秒', '');
+      }
+    }).catch(function (err) {
+      setSyncStatus('同步失败：' + err.message, 'bad');
+    }).then(function () {
+      holdings.syncing = false;
+      btn.disabled = false;
+    });
+  }
 
   /* ---------- 刷新 ---------- */
 
@@ -883,6 +1091,8 @@
   }
 
   document.getElementById('refresh-btn').addEventListener('click', function () { refreshAll(true); });
+
+  document.getElementById('sync-btn').addEventListener('click', syncNav);
 
   document.getElementById('watch-form').addEventListener('submit', function (e) {
     e.preventDefault();

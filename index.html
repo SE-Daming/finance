@@ -18,7 +18,14 @@
 
   <main class="grid">
     <section class="card card-full" id="card-holdings">
-      <h2>基金持仓</h2>
+      <div class="card-head">
+        <h2>基金持仓</h2>
+        <div class="hd-tools">
+          <span class="hd-sync" id="sync-status"></span>
+          <button id="sync-btn" class="ghost-btn" type="button"
+                  title="拉取各基金最新净值，重算区间收益和推算持仓">⇅ 同步净值</button>
+        </div>
+      </div>
       <div class="card-body" data-state="loading"><span class="spinner"></span></div>
     </section>
 
@@ -56,6 +63,7 @@
     <p>数据来源：腾讯财经公开行情接口，仅供个人参考，不构成投资建议。</p>
   </footer>
 
+  <script src="js/nav-math.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

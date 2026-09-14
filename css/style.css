@@ -76,6 +76,26 @@ body {
   margin-bottom: 14px;
 }
 
+/* 卡片标题行：左边标题，右边工具（目前只有「同步净值」） */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.card-head h2 { margin-bottom: 0; }
+
+.hd-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hd-sync { font-size: 12px; color: var(--text-dim); }
+.hd-sync.busy { color: var(--accent); }
+/* 红＝出事了，跟涨跌无关，所以成功态故意不上色（绿在这里是「跌」，会看反） */
+.hd-sync.bad { color: var(--up); }
+
+.ghost-btn[disabled] { opacity: .5; cursor: default; }
+.ghost-btn[disabled]:hover { color: var(--text-dim); border-color: var(--card-border); }
+
 /* ---- 数据行 ---- */
 .quote-list { display: flex; flex-direction: column; gap: 12px; }
 .quote-row {
