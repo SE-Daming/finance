@@ -1,5 +1,4 @@
 {
-  "generatedAt": "2026-09-14",
   "asOf": "2026-09-11",
   "note": "由 tools/update-returns.mjs 生成。区间收益按官方日涨跌幅逐日复利，已含分红再投。",
   "funds": {

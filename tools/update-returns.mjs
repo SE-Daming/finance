@@ -257,6 +257,22 @@ function project(trend, snap) {
   };
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* 接口偶尔会抖，抖一次就丢一只基金。每日定时任务没人看着，重试几把 */
+async function fetchTrendRetry(code, tries = 3) {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fetchTrend(code);
+    } catch (err) {
+      lastErr = err;
+      if (i < tries - 1) await sleep(800 * (i + 1));
+    }
+  }
+  throw lastErr;
+}
+
 /* 一次拉几只，别把人家接口打爆 */
 async function mapLimit(items, limit, fn) {
   const out = new Array(items.length);
@@ -276,28 +292,34 @@ const { funds, snapshotDate } = await readHoldings();
 console.log(`从 holdings.md 读到 ${funds.length} 只基金，开始拉净值…`);
 console.log(snapshotDate ? `快照日期：${snapshotDate}\n` : '（没有「快照日期」，本次只算区间收益，不推算持仓）\n');
 
-let failed = 0;
 const results = await mapLimit(funds, 5, async (f) => {
   try {
-    const { trend } = await fetchTrend(f.code);
+    const { trend } = await fetchTrendRetry(f.code);
     const r = computeReturns(trend);
     const projected = snapshotDate
       ? project(trend, { ...f, snapshotDate })
       : null;
     return { ...f, ...r, projected };
   } catch (err) {
-    failed++;
-    console.log(`  ✗ ${f.code} ${f.name} —— ${err.message}`);
     return { ...f, error: err.message };
   }
 });
+
+/* 缺一只就不写文件：宁可让看板停在上一份完整数据上，也不能发出一个少了几只的版本——
+ * 缺的那只会在页面上丢掉区间收益、持仓还会退回手写快照。定时任务没人盯着，静默降级最危险 */
+const failedList = results.filter((r) => r.error);
+if (failedList.length) {
+  console.error(`\n✗ ${failedList.length}/${results.length} 只基金拉不到净值，本次不写 data/returns.json：`);
+  for (const r of failedList) console.error(`    ${r.code} ${r.name} —— ${r.error}`);
+  console.error('  看板会继续用上一份完整数据，明天定时任务会再试。');
+  process.exit(1);
+}
 
 /* 结果表，顺便肉眼核对：同类基金的区间收益应该很接近 */
 const pct = (v) => (v == null ? '  —   ' : (v > 0 ? '+' : '') + v.toFixed(2) + '%');
 console.log('代码     1日      1周      1月      3月      6月      1年      净值日期    基金名称');
 console.log('─'.repeat(110));
 for (const r of results) {
-  if (r.error) continue;
   console.log(
     r.code + '  ' +
     [r.r1d, r.r1w, r.r1m, r.r3m, r.r6m, r.r1y].map((v) => pct(v).padStart(7)).join(' ') + '  ' +
@@ -333,14 +355,14 @@ if (proj.length) {
   console.log('\n没有可推算的持仓（表里缺「持有金额」或「持有收益/持仓收益率」）。');
 }
 
-const ok = results.filter((r) => !r.error);
-const asOf = ok.map((r) => r.navDate).filter(Boolean).sort().pop() || null;
+const asOf = results.map((r) => r.navDate).filter(Boolean).sort().pop() || null;
 
+/* 故意不写「生成时间」：每日定时任务靠 git diff 判断要不要提交，一个每次都变的
+ * 时间戳会让它天天提交空变更。要知道什么时候生成的，看那条提交的时间即可 */
 const payload = {
-  generatedAt: new Date().toISOString().slice(0, 10),
   asOf,
   note: '由 tools/update-returns.mjs 生成。区间收益按官方日涨跌幅逐日复利，已含分红再投。',
-  funds: Object.fromEntries(ok.map((r) => [r.code, {
+  funds: Object.fromEntries(results.map((r) => [r.code, {
     name: r.name, navDate: r.navDate,
     r1d: r.r1d, r1w: r.r1w, r1m: r.r1m, r3m: r.r3m, r6m: r.r6m, r1y: r.r1y,
     projected: r.projected || null,
@@ -356,5 +378,5 @@ if (snapshotDate && proj.length) {
 }
 
 await writeFile(OUTPUT, JSON.stringify(payload, null, 2) + '\n', 'utf8');
-console.log(`\n✓ 写入 data/returns.json：${ok.length} 只成功${failed ? `，${failed} 只失败` : ''}，` +
+console.log(`\n✓ 写入 data/returns.json：${results.length} 只，` +
   `净值截至 ${asOf}${proj.length ? `，其中 ${proj.length} 只带推算持仓` : ''}`);
