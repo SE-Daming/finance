@@ -12,11 +12,11 @@
       "r6m": 15.84,
       "r1y": 16.4,
       "projected": {
-        "amount": 1239.66,
-        "cost": 1251.93,
+        "amount": 1339.66,
+        "cost": 1351.93,
         "profit": -12.27,
-        "rate": -0.00980000000000001,
-        "cumulative": 1000,
+        "rate": -0.00907510980966326,
+        "cumulative": 1100,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -183,11 +183,11 @@
       "r6m": 14.75,
       "r1y": 15.27,
       "projected": {
-        "amount": 286.27,
-        "cost": 290.28,
+        "amount": 296.27,
+        "cost": 300.28,
         "profit": -4.01,
-        "rate": -0.013800000000000017,
-        "cumulative": 270,
+        "rate": -0.013340422514284377,
+        "cumulative": 280,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -202,11 +202,11 @@
       "r6m": 14.76,
       "r1y": 15.22,
       "projected": {
-        "amount": 286.57,
-        "cost": 290.26,
+        "amount": 296.57,
+        "cost": 300.26,
         "profit": -3.69,
-        "rate": -0.012700000000000046,
-        "cumulative": 270,
+        "rate": -0.012277027961530781,
+        "cumulative": 280,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -221,11 +221,11 @@
       "r6m": 15.14,
       "r1y": 15.9,
       "projected": {
-        "amount": 282.13,
-        "cost": 285.21,
+        "amount": 292.13,
+        "cost": 295.21,
         "profit": -3.08,
-        "rate": -0.010800000000000044,
-        "cumulative": 264.99,
+        "rate": -0.010434159070206889,
+        "cumulative": 274.99,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -240,11 +240,11 @@
       "r6m": 15.02,
       "r1y": 15.68,
       "projected": {
-        "amount": 457.39,
-        "cost": 462.01,
+        "amount": 557.39,
+        "cost": 562.01,
         "profit": -4.62,
-        "rate": -0.009999999999999969,
-        "cumulative": 260,
+        "rate": -0.008220672549830029,
+        "cumulative": 360,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -259,11 +259,11 @@
       "r6m": 14.4,
       "r1y": 15.16,
       "projected": {
-        "amount": 286.43,
-        "cost": 290.09,
+        "amount": 296.43,
+        "cost": 300.09,
         "profit": -3.66,
-        "rate": -0.012599999999999974,
-        "cumulative": 270,
+        "rate": -0.012180119066904235,
+        "cumulative": 280,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -278,11 +278,11 @@
       "r6m": 14.28,
       "r1y": 14.88,
       "projected": {
-        "amount": 286.67,
-        "cost": 290.24,
+        "amount": 296.67,
+        "cost": 300.24,
         "profit": -3.57,
-        "rate": -0.012299999999999927,
-        "cumulative": 270,
+        "rate": -0.011890327671498883,
+        "cumulative": 280,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -297,11 +297,11 @@
       "r6m": 14.78,
       "r1y": 15.98,
       "projected": {
-        "amount": 286.38,
-        "cost": 290.27,
+        "amount": 296.38,
+        "cost": 300.27,
         "profit": -3.89,
-        "rate": -0.013399999999999928,
-        "cumulative": 270,
+        "rate": -0.012953734396413721,
+        "cumulative": 280,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -316,11 +316,11 @@
       "r6m": 14.54,
       "r1y": 15.58,
       "projected": {
-        "amount": 286.59,
-        "cost": 290.25,
+        "amount": 296.59,
+        "cost": 300.25,
         "profit": -3.66,
-        "rate": -0.012600000000000016,
-        "cumulative": 270,
+        "rate": -0.012180345674348335,
+        "cumulative": 280,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -335,11 +335,11 @@
       "r6m": 10.2,
       "r1y": 9.94,
       "projected": {
-        "amount": 595.13,
-        "cost": 602.48,
+        "amount": 695.13,
+        "cost": 702.48,
         "profit": -7.35,
-        "rate": -0.012199999999999902,
-        "cumulative": 400,
+        "rate": -0.010463296392904057,
+        "cumulative": 500,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -354,11 +354,11 @@
       "r6m": 11.27,
       "r1y": 11.04,
       "projected": {
-        "amount": 286.04,
-        "cost": 290.31,
+        "amount": 296.04,
+        "cost": 300.31,
         "profit": -4.27,
-        "rate": -0.014700000000000107,
-        "cumulative": 260,
+        "rate": -0.014210501769220734,
+        "cumulative": 270,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -373,11 +373,11 @@
       "r6m": 11.03,
       "r1y": 10.61,
       "projected": {
-        "amount": 286.28,
-        "cost": 290.29,
+        "amount": 296.28,
+        "cost": 300.29,
         "profit": -4.01,
-        "rate": -0.013800000000000007,
-        "cumulative": 270,
+        "rate": -0.013340438033105936,
+        "cumulative": 280,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }
@@ -411,11 +411,11 @@
       "r6m": 27.41,
       "r1y": 71.06,
       "projected": {
-        "amount": 882.62,
-        "cost": 869.06,
+        "amount": 912.62,
+        "cost": 899.06,
         "profit": 13.56,
-        "rate": 0.015599999999999933,
-        "cumulative": 810,
+        "rate": 0.015079457839770034,
+        "cumulative": 840,
         "navDate": "2026-09-11",
         "anchorDate": "2026-09-11"
       }

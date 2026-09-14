@@ -21,6 +21,10 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const HOLDINGS = join(ROOT, 'data', 'holdings.md');
 const OUTPUT = join(ROOT, 'data', 'returns.json');
 
+/* 交易日历取自上证指数（和 js/app.js 的 CAL_DAYS 保持一致） */
+const KLINE_CODE = 'sh000001';
+const CAL_DAYS = 40;
+
 /* 表头里出现其中之一，才认作持仓表（和前端 pickHoldingsTable 同一套规则） */
 const MARKER_COLS = ['类别', '基金名称', '持有金额', '持有收益', '每日定投金额', '投入本金', '累计定投'];
 
@@ -154,6 +158,20 @@ async function fetchTrendRetry(code, tries = 3) {
   throw lastErr;
 }
 
+/* ---------- 拉交易日历 ---------- */
+
+/* 上证指数的日K日期就是 A 股交易日（周末、节假日都不在里面）。
+ * 推算持仓按它一天推进一期定投——用真实日历而不是「周一到周五」，节假日才不会被算成定投日。 */
+async function fetchTradingDays(code, days) {
+  const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,,,${days},qfq`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const d = json.data && json.data[code];
+  const arr = (d && (d.day || d.qfqday)) || [];
+  return arr.map((k) => k[0]);
+}
+
 /* 一次拉几只，别把人家接口打爆 */
 async function mapLimit(items, limit, fn) {
   const out = new Array(items.length);
@@ -192,7 +210,16 @@ if (failedList.length) {
   process.exit(1);
 }
 
-const payload = NavMath.buildPayload(results, snapshotDate);
+/* 交易日历拉不到不算失败：buildPayload 会退回只用各基金自己的净值日，
+ * 代价只是「今天净值还没公布」这一期不算数，页面点一下「同步净值」就能补上，不值得整个重跑 */
+let calendar = [];
+try {
+  calendar = await fetchTradingDays(KLINE_CODE, CAL_DAYS);
+} catch (err) {
+  console.warn(`⚠ 交易日历拉不到（${err.message}），本次退回按各基金净值日推算，少算的是最新这一天。`);
+}
+
+const payload = NavMath.buildPayload(results, snapshotDate, calendar);
 
 /* 结果表，顺便肉眼核对：同类基金的区间收益应该很接近 */
 const pct = (v) => (v == null ? '  —   ' : (v > 0 ? '+' : '') + v.toFixed(2) + '%');
@@ -211,8 +238,8 @@ for (const r of results) {
 const proj = results.filter((r) => payload.funds[r.code].projected);
 if (proj.length) {
   const money = (v) => (v == null ? '—' : v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-  console.log('\n推算持仓（快照 → 最新净值日）');
-  console.log('代码     快照市值     推算市值     差额      快照收益率  推算收益率   截止        基金名称');
+  console.log(`\n推算持仓（快照 → ${payload.projection.asOf}，按 A 股交易日推进）`);
+  console.log('代码     快照市值     推算市值     差额      快照收益率  推算收益率   净值截至    基金名称');
   console.log('─'.repeat(110));
   let sumSnap = 0, sumProj = 0;
   for (const r of proj) {
@@ -236,5 +263,5 @@ if (proj.length) {
 }
 
 await writeFile(OUTPUT, JSON.stringify(payload, null, 2) + '\n', 'utf8');
-console.log(`\n✓ 写入 data/returns.json：${results.length} 只，` +
-  `净值截至 ${payload.asOf}${proj.length ? `，其中 ${proj.length} 只带推算持仓` : ''}`);
+console.log(`\n✓ 写入 data/returns.json：${results.length} 只，净值截至 ${payload.asOf}` +
+  (proj.length ? `；推算持仓 ${proj.length} 只，定投算到 ${payload.projection.asOf}` : ''));

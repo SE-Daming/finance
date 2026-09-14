@@ -17,6 +17,10 @@
   var FX_METALS = ['whUSDCNY', 'whEURUSD', 'hf_GC', 'hf_SI'];
   var KLINE_CODE = 'sh000001'; // 迷你走势图：上证指数
   var KLINE_DAYS = 30;
+  /* 交易日历要取多少个交易日：只需覆盖「快照 → 今天」这段尾巴。
+   * 更早的区间由各基金自己的净值日兜底（见 nav-math.js 的 buildPayload），
+   * 所以这里给足 40 天足够，不用跟着快照日期一起涨 */
+  var CAL_DAYS = 40;
 
   var WATCH_KEY = 'finance-watch-list';
   var DEFAULT_WATCH = ['161725', '510300'];
@@ -99,8 +103,8 @@
     return (/^[569]/.test(code6) ? 'sh' : 'sz') + code6;
   }
 
-  /* 近 N 个交易日收盘价 */
-  function fetchCloses(code, days) {
+  /* 近 N 个交易日的日K原始数组，每行 [日期, 开, 收, 高, 低, 成交量] */
+  function fetchKline(code, days) {
     var cb = 'financeKline_' + Date.now();
     return new Promise(function (resolve, reject) {
       window[cb] = function (json) {
@@ -108,7 +112,7 @@
           var d = json.data[code];
           var arr = (d && (d.day || d.qfqday)) || [];
           if (!arr.length) throw new Error('K线为空');
-          resolve(arr.map(function (k) { return parseFloat(k[2]); }));
+          resolve(arr);
         } catch (e) {
           reject(new Error('K线数据解析失败'));
         } finally {
@@ -118,6 +122,21 @@
       injectScript(API_KLINE + '?_callback=' + cb +
         '&param=' + code + ',day,,,' + days + ',qfq&r=' + Date.now())
         .catch(function () { reject(new Error('K线请求失败')); });
+    });
+  }
+
+  /* 近 N 个交易日收盘价 */
+  function fetchCloses(code, days) {
+    return fetchKline(code, days).then(function (arr) {
+      return arr.map(function (k) { return parseFloat(k[2]); });
+    });
+  }
+
+  /* A 股交易日历（也就是上证指数的日K日期），推算持仓按它一天推进一期定投。
+   * 用真实日历而不是「周一到周五」：节假日休市那天没有定投，按工作日算会永远多算。 */
+  function fetchTradingDays() {
+    return fetchKline(KLINE_CODE, CAL_DAYS).then(function (arr) {
+      return arr.map(function (k) { return k[0]; });
     });
   }
 
@@ -410,8 +429,9 @@
     var pj = derived && derived.projection;
     var projNote = pj
       ? '<p class="hd-note">市值 / 成本 / 收益按 <b>快照日期 ' + esc(pj.snapshotDate) +
-        '</b> 的数字，加每日定投计划、用基金每日净值推算到 <b>' + esc(pj.asOf) +
-        '</b>，不是实时持仓。跑偏了就从基金 App 复制一份新数字，覆盖 ' +
+        '</b> 的数字，加每日定投计划、按 A 股交易日推算到 <b>' + esc(pj.asOf) +
+        '</b>，不是实时持仓。' + esc(NavMath.PROJ_NOTE) +
+        '跑偏了就从基金 App 复制一份新数字，覆盖 ' +
         '<code>data/holdings.md</code> 的表格，再把那里的「快照日期」改成你复制的那一天。</p>'
       : '';
 
@@ -1032,9 +1052,17 @@
     var t0 = Date.now();
     setSyncStatus('同步中 0/' + entries.length, 'busy');
 
-    loadTrends(entries.map(function (e) { return e.code; }), function (done, total) {
-      setSyncStatus('同步中 ' + done + '/' + total, 'busy');
-    }).then(function (res) {
+    /* 交易日历和净值一起拉。日历失败不算同步失败：退回只用各基金自己的净值日，
+     * 少算的只是「今天净值还没公布」那一期，等净值出来下次同步自动补上，不会算错 */
+    var calPromise = fetchTradingDays().catch(function () { return []; });
+
+    Promise.all([
+      loadTrends(entries.map(function (e) { return e.code; }), function (done, total) {
+        setSyncStatus('同步中 ' + done + '/' + total, 'busy');
+      }),
+      calPromise
+    ]).then(function (both) {
+      var res = both[0], calendar = both[1];
       var ok = entries.filter(function (e) { return res.trends[e.code]; })
         .map(function (e) {
           var t = res.trends[e.code];
@@ -1055,7 +1083,7 @@
 
       /* 宁缺毋滥只对无人值守的定时任务成立。这里是用户等着看的，二十多只拉到十九只
        * 也要把十九只摆出来，缺了谁明确写出来就行——但绝不静默 */
-      var payload = NavMath.buildPayload(ok, holdings.snapshotDate);
+      var payload = NavMath.buildPayload(ok, holdings.snapshotDate, calendar);
       payload.sync = { at: Date.now(), ms: Date.now() - t0, failed: res.failed };
 
       holdings.derived = payload;

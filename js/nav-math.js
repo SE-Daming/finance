@@ -24,6 +24,9 @@
 
   var NOTE = '区间收益按官方日涨跌幅逐日复利，已含分红再投。';
 
+  var PROJ_NOTE = '推算按 A 股交易日推进：当天净值还没公布的，用最近的已知净值当买入价估算，' +
+    '净值出来后自动纠正。';
+
   var round2 = function (v) { return Math.round(v * 100) / 100; };
 
   /* 时间戳是北京时间当天零点，直接用 toISOString 会倒回前一天，所以先补 8 小时 */
@@ -120,21 +123,25 @@
 
   /* ---------- 推算持仓 ----------
    *
-   * 拿快照当锚，用净值把持仓滚到最新净值日：
+   * 拿快照当锚，用净值把持仓滚到最新交易日：
    *
    *   锚点净值 nav0 = 快照日期当天（或之前最近一天）的净值
    *   份额 shares = 快照市值 ÷ nav0          ← 快照那天的份额
-   *   之后每有一个净值日，就按每日定投买进 金额 ÷ 当日净值 份，成本同步累加
+   *   之后每过一个交易日，就按每日定投买进 金额 ÷ 当日净值 份，成本同步累加
    *   推算市值 = 最终份额 × 最新净值
    *
    * 为什么不能只拿「快照市值 × 区间涨幅」：那等于假设新投的钱在期初就到位了。
    * 定投是一天天买进去的，越晚买的钱吃到的涨幅越少——尤其回调行情里差别明显。
    *
-   * 误差来源：实际扣款未必每个净值日都成功（QDII 有额度限制、美股节假日与 A 股不同步），
+   * 误差来源：实际扣款未必每个交易日都成功（QDII 有额度限制、美股节假日与 A 股不同步），
    * 所以推算值会慢慢偏离真实持仓。从基金 App 复制一份新快照覆盖 holdings.md 的表格、
    * 把「快照日期」改成复制的那天，就能重新锚定。
    */
-  function project(trend, snap) {
+  /* days 是交易日历（升序，来自 buildPayload 的并集），不是净值日。
+   * 钱按交易日扣，净值却往往晚一天才公布（QDII 要等美股收盘），按净值日推进的话，
+   * 今天投进去的钱得等明天净值出来才认，数字一整天不动。所以当天没净值就沿用最近的
+   * 已知净值当买入价——等真净值出来，份额会从锚点整个重算，估算自动被纠正，不会越错越远。 */
+  function project(trend, snap, days) {
     if (snap.amount == null || snap.cost == null) return null;
     if (!snap.snapshotDate) return null;
 
@@ -147,10 +154,16 @@
     var cost = snap.cost;
     var cumulative = snap.cumulative == null ? null : snap.cumulative;
     var daily = snap.daily > 0 ? snap.daily : 0;
+    var anchorDate = trend[anchorIdx].date;
 
-    for (var i = anchorIdx + 1; i < trend.length; i++) {
-      if (daily) {
-        shares += daily / trend[i].nav;
+    if (daily && days && days.length) {
+      var navIdx = anchorIdx;
+      for (var i = 0; i < days.length; i++) {
+        var d = days[i];
+        if (d <= anchorDate) continue;
+        /* 买入价 = 不晚于 d 的最新净值；d 当天还没公布的，就沿用前一天的 */
+        while (navIdx + 1 < trend.length && trend[navIdx + 1].date <= d) navIdx++;
+        shares += daily / trend[navIdx].nav;
         cost += daily;
         if (cumulative != null) cumulative += daily;
       }
@@ -168,17 +181,29 @@
       rate: cost ? profit / cost : null,
       cumulative: cumulative == null ? null : round2(cumulative),
       navDate: trend[lastIdx].date,
-      anchorDate: trend[anchorIdx].date
+      anchorDate: anchorDate
     };
   }
 
   /* entries: [{code, name, trend, amount, cost, daily, cumulative}]
    * amount/cost/daily/cumulative 是快照那一行的数（来自 snapshotOf）；snapshotDate 为空
    * 或没有 amount/cost 时，这只基金只算区间收益。
+   * calendar 是 A 股交易日（上证指数日K的日期）；拿不到就传空数组，退回用各基金的净值日。
    * 看板读的 data/returns.json 和「同步净值」按钮算出来的都是这个结构，前端一视同仁 */
-  function buildPayload(entries, snapshotDate) {
+  function buildPayload(entries, snapshotDate, calendar) {
+    /* 交易日历 = 外部给的 + 各基金的净值日，取并集再去重排序。
+     * 并集是有意的：外部日历负责补上「今天是交易日、但净值还没公布」这一天（其余来源都补不了），
+     * 各基金的净值日负责兜住更早的整段区间。这样任何一方缺了都不至于把定投算漏，
+     * 而重复的日期也不会让某一天被数两次——用户要的就是「一天一次，不多不少」。 */
+    var dayMap = {};
+    (calendar || []).forEach(function (d) { if (d) dayMap[d] = 1; });
+    entries.forEach(function (e) {
+      e.trend.forEach(function (t) { dayMap[t.date] = 1; });
+    });
+    var days = Object.keys(dayMap).sort();
+
     var funds = {};
-    var navDates = [], projDates = [], projCount = 0;
+    var navDates = [], projCount = 0;
 
     entries.forEach(function (e) {
       var r = computeReturns(e.trend);
@@ -186,7 +211,7 @@
         ? project(e.trend, {
             amount: e.amount, cost: e.cost, daily: e.daily,
             cumulative: e.cumulative, snapshotDate: snapshotDate
-          })
+          }, days)
         : null;
 
       funds[e.code] = {
@@ -197,7 +222,7 @@
         projected: p || null          // 没有就是 null，别省掉这个键：前端按形状取值
       };
       if (r.navDate) navDates.push(r.navDate);
-      if (p) { projCount++; projDates.push(p.navDate); }
+      if (p) projCount++;
     });
 
     var payload = {
@@ -208,7 +233,9 @@
     if (snapshotDate && projCount) {
       payload.projection = {
         snapshotDate: snapshotDate,
-        asOf: projDates.sort().pop(),
+        /* 推算推进到哪一天 = 日历的最后一天。注意它和上面 asOf（最新净值日）不是一回事了：
+         * asOf 是「净值公布到哪天」，这里是「定投算到哪天」，前者通常会晚一步 */
+        asOf: days.length ? days[days.length - 1] : null,
         funds: projCount
       };
     }
@@ -218,6 +245,7 @@
   return {
     WINDOWS: WINDOWS,
     NOTE: NOTE,
+    PROJ_NOTE: PROJ_NOTE,
     toDate: toDate,
     round2: round2,
     normalizeTrend: normalizeTrend,
