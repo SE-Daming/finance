@@ -19,13 +19,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 2717.12,
-        "cost": 2651.93,
-        "profit": 65.19,
-        "rate": 0.024582004378246217,
-        "cumulative": 2400,
+        "amount": 2221.99,
+        "cost": 2150,
+        "profit": 71.99,
+        "rate": 0.033483720930232455,
+        "cumulative": 2100,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "008164": {
@@ -45,13 +45,13 @@
         "r1y": "2025-10-10"
       },
       "projected": {
-        "amount": 2238.36,
-        "cost": 2195.82,
-        "profit": 42.54,
-        "rate": 0.01937389628143955,
+        "amount": 2188.35,
+        "cost": 2146.05,
+        "profit": 42.3,
+        "rate": 0.019710631159572323,
         "cumulative": 2100,
         "navDate": "2026-10-09",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-09"
       }
     },
     "000834": {
@@ -71,13 +71,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 265.46,
+        "amount": 267.77,
         "cost": 260,
-        "profit": 5.46,
-        "rate": 0.020992955413934693,
-        "cumulative": null,
+        "profit": 7.77,
+        "rate": 0.029884615384615315,
+        "cumulative": 260,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "008971": {
@@ -97,13 +97,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 265.26,
+        "amount": 267.58,
         "cost": 260,
-        "profit": 5.26,
-        "rate": 0.02024763992346703,
-        "cumulative": null,
+        "profit": 7.58,
+        "rate": 0.029153846153846093,
+        "cumulative": 260,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "040046": {
@@ -123,13 +123,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 265.8,
+        "amount": 268.1,
         "cost": 260,
-        "profit": 5.8,
-        "rate": 0.022321392696650396,
-        "cumulative": null,
+        "profit": 8.1,
+        "rate": 0.03115384615384624,
+        "cumulative": 260,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "014978": {
@@ -149,13 +149,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 266.28,
+        "amount": 268.58,
         "cost": 260,
-        "profit": 6.28,
-        "rate": 0.024148175159260394,
-        "cumulative": null,
+        "profit": 8.58,
+        "rate": 0.03299999999999994,
+        "cumulative": 260,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "019524": {
@@ -175,13 +175,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 266.09,
+        "amount": 268.28,
         "cost": 260,
-        "profit": 6.09,
-        "rate": 0.023433541930342673,
-        "cumulative": null,
+        "profit": 8.28,
+        "rate": 0.03184615384615374,
+        "cumulative": 260,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "019547": {
@@ -201,13 +201,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 265.81,
+        "amount": 267.98,
         "cost": 260,
-        "profit": 5.81,
-        "rate": 0.022348839550058897,
-        "cumulative": null,
+        "profit": 7.98,
+        "rate": 0.030692307692307762,
+        "cumulative": 260,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "019548": {
@@ -227,13 +227,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 265.86,
+        "amount": 268.03,
         "cost": 260,
-        "profit": 5.86,
-        "rate": 0.022547848576307563,
-        "cumulative": null,
+        "profit": 8.03,
+        "rate": 0.03088461538461528,
+        "cumulative": 260,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "016452": {
@@ -253,13 +253,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 440.01,
-        "cost": 430.28,
-        "profit": 9.73,
-        "rate": 0.022619806427216754,
+        "amount": 422.26,
+        "cost": 410,
+        "profit": 12.26,
+        "rate": 0.029902439024390222,
         "cumulative": 410,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "016453": {
@@ -279,13 +279,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 440.29,
-        "cost": 430.26,
-        "profit": 10.03,
-        "rate": 0.023311817687152393,
+        "amount": 422.69,
+        "cost": 410,
+        "profit": 12.69,
+        "rate": 0.030951219512195115,
         "cumulative": 410,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "019441": {
@@ -305,13 +305,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 436.31,
-        "cost": 425.21,
-        "profit": 11.1,
-        "rate": 0.026095595882576535,
-        "cumulative": 404.99,
+        "amount": 408.04,
+        "cost": 394.99,
+        "profit": 13.05,
+        "rate": 0.03303881110914203,
+        "cumulative": 394.99,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "019442": {
@@ -331,13 +331,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 1902.91,
-        "cost": 1862.01,
-        "profit": 40.9,
-        "rate": 0.021966332570874856,
-        "cumulative": 1660,
+        "amount": 1100.81,
+        "cost": 1060,
+        "profit": 40.81,
+        "rate": 0.03849999999999995,
+        "cumulative": 1060,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "019736": {
@@ -357,13 +357,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 440.02,
-        "cost": 430.09,
-        "profit": 9.93,
-        "rate": 0.023099077718906635,
+        "amount": 422.15,
+        "cost": 410,
+        "profit": 12.15,
+        "rate": 0.029634146341463358,
         "cumulative": 410,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "019737": {
@@ -383,13 +383,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 440.19,
-        "cost": 430.24,
-        "profit": 9.95,
-        "rate": 0.02313485099076117,
+        "amount": 422.49,
+        "cost": 410,
+        "profit": 12.49,
+        "rate": 0.030463414634146365,
         "cumulative": 410,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "019172": {
@@ -409,13 +409,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 439.9,
-        "cost": 430.27,
-        "profit": 9.63,
-        "rate": 0.022389597401961867,
+        "amount": 422.07,
+        "cost": 410,
+        "profit": 12.07,
+        "rate": 0.029439024390243887,
         "cumulative": 410,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "019173": {
@@ -435,13 +435,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 440.04,
-        "cost": 430.25,
-        "profit": 9.79,
-        "rate": 0.02276276396996122,
+        "amount": 422.39,
+        "cost": 410,
+        "profit": 12.39,
+        "rate": 0.03021951219512192,
         "cumulative": 410,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "007722": {
@@ -461,13 +461,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 2011.67,
-        "cost": 2002.48,
-        "profit": 9.19,
-        "rate": 0.00458769244327212,
-        "cumulative": 1800,
+        "amount": 1111.12,
+        "cost": 1100,
+        "profit": 11.12,
+        "rate": 0.01010909090909081,
+        "cumulative": 1100,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "017641": {
@@ -487,13 +487,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 429.9,
-        "cost": 430.31,
-        "profit": -0.41,
-        "rate": -0.0009523972684052326,
+        "amount": 411.93,
+        "cost": 410,
+        "profit": 1.93,
+        "rate": 0.004707317073170748,
         "cumulative": 400,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "019305": {
@@ -513,13 +513,13 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 430.06,
-        "cost": 430.29,
-        "profit": -0.22,
-        "rate": -0.0005142028160791595,
+        "amount": 412.24,
+        "cost": 410,
+        "profit": 2.24,
+        "rate": 0.005463414634146364,
         "cumulative": 410,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     },
     "025857": {
@@ -542,10 +542,10 @@
         "amount": 918.08,
         "cost": 1000,
         "profit": -81.92,
-        "rate": -0.08191804033318727,
+        "rate": -0.08191999999999997,
         "cumulative": null,
         "navDate": "2026-10-09",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-09"
       }
     },
     "016665": {
@@ -565,18 +565,18 @@
         "r1y": "2025-10-09"
       },
       "projected": {
-        "amount": 1257.04,
-        "cost": 1289.06,
-        "profit": -32.02,
-        "rate": -0.02483916861646628,
+        "amount": 1191.82,
+        "cost": 1230,
+        "profit": -38.18,
+        "rate": -0.031040650406504118,
         "cumulative": 1230,
         "navDate": "2026-10-08",
-        "anchorDate": "2026-09-11"
+        "anchorDate": "2026-10-08"
       }
     }
   },
   "projection": {
-    "snapshotDate": "2026-09-13",
+    "snapshotDate": "2026-10-09",
     "asOf": "2026-10-09",
     "funds": 22
   }
