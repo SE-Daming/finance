@@ -5,3 +5,6 @@
 *.log
 .DS_Store
 Thumbs.db
+
+# 回测抓下来的原始数据（1.5 MB 第三方行情，跑 node tools/backtest-data.mjs 可重建）
+data/backtest/
