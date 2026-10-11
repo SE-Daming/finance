@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const NavMath = require('../js/nav-math.js');
+const HT = require('../js/holdings-table.js');
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const HOLDINGS = join(ROOT, 'data', 'holdings.md');
@@ -25,105 +26,32 @@ const OUTPUT = join(ROOT, 'data', 'returns.json');
 const KLINE_CODE = 'sh000001';
 const CAL_DAYS = 40;
 
-/* 表头里出现其中之一，才认作持仓表（和前端 pickHoldingsTable 同一套规则） */
-const MARKER_COLS = ['类别', '基金名称', '持有金额', '持有收益', '每日定投金额', '投入本金', '累计定投'];
-
-const normKey = (s) => String(s == null ? '' : s).replace(/[\s　／/]/g, '');
-
-/* "1504.94" / "+8.89" / "-1.00%" 取数；"—"、空、非数 一律 null */
-function num(s) {
-  const t = String(s == null ? '' : s).replace(/[^0-9.+-]/g, '');
-  if (!/[0-9]/.test(t)) return null;
-  const n = parseFloat(t);
-  return Number.isNaN(n) ? null : n;
-}
-
-/* 从 "50 元/天" 取每日金额；"按两笔各 500 计" 取不到 → null */
-function parseDaily(s) {
-  const m = String(s == null ? '' : s).match(/(\d+(?:\.\d+)?)\s*元\s*\/\s*天/);
-  return m ? parseFloat(m[1]) : null;
-}
+/* 表头识别、找列、取数都在 js/holdings-table.js 里，和 tools/update-limits.mjs 共用 */
 
 /* ---------- 读 holdings.md ---------- */
 
-function parseMdTables(md) {
-  const lines = md.split(/\r?\n/).map((l) => l.trim());
-  const cells = (line) => line.replace(/^\|/, '').replace(/\|$/, '').split('|').map((s) => s.trim());
-
-  const tables = [];
-  let cur = null;
-  for (const line of lines) {
-    if (line.charAt(0) !== '|') { cur = null; continue; }
-    const c = cells(line);
-    if (c.every((x) => x === '')) continue;
-    if (c.every((x) => /^:?-{2,}:?$/.test(x))) continue;
-    if (cur) cur.rows.push(c);
-    else tables.push((cur = { header: c, rows: [] }));
-  }
-  return tables;
-}
-
-function pickHoldingsTable(md) {
-  const tables = parseMdTables(md);
-  for (const t of tables) {
-    if (t.header.some((h) => MARKER_COLS.includes(normKey(h)))) return t;
-  }
-  return { header: [], rows: [] };
-}
-
-function colIdx(header, name) {
-  const want = normKey(name);
-  return header.findIndex((h) => normKey(h) === want);
-}
-
-/* 「快照日期：2026-09-13」——整行匹配，免得正文里提到也命中 */
-const SNAPSHOT_RE = /^\s*快照日期[：:]\s*(\d{4}-\d{2}-\d{2})\s*$/m;
-
 async function readHoldings() {
   const md = await readFile(HOLDINGS, 'utf8');
-  const tbl = pickHoldingsTable(md);
-  if (!tbl.rows.length) throw new Error('data/holdings.md 里没找到持仓表格');
+  const t = HT.readFunds(md);
+  const ci = t.ci;
+  const cell = (row, i) => HT.cellOf(row, i);
 
-  const ci = {
-    code: colIdx(tbl.header, '代码'),
-    name: colIdx(tbl.header, '基金名称'),
-    daily: colIdx(tbl.header, '每日定投金额'),
-    cumulative: colIdx(tbl.header, '累计定投'),
-    capital: colIdx(tbl.header, '投入本金'),
-    amount: colIdx(tbl.header, '持有金额'),
-    profit: colIdx(tbl.header, '持有收益'),
-    rateIn: colIdx(tbl.header, '持仓收益率'),
-  };
-  if (ci.code < 0) throw new Error('持仓表里没有「代码」列，无法取净值');
-
-  const snapMatch = md.match(SNAPSHOT_RE);
-  const snapshotDate = snapMatch ? snapMatch[1] : null;
-
-  const cell = (row, i) => (i < 0 || row[i] == null ? '' : row[i]);
-  const funds = [];
-  const seen = new Set();
-  for (const row of tbl.rows) {
-    const code = cell(row, ci.code).trim();
-    if (!/^\d{6}$/.test(code)) continue;          // 空 / "—" 的行跳过
-    if (seen.has(code)) continue;
-    seen.add(code);
-
+  const funds = t.rows.map((row) => {
     /* 市值 / 成本按 NavMath 里那套规则推，和看板显示的完全一致 */
     const snap = NavMath.snapshotOf(
-      num(cell(row, ci.amount)), num(cell(row, ci.profit)),
-      num(cell(row, ci.capital)), num(cell(row, ci.rateIn))
+      HT.num(cell(row, ci.amount)), HT.num(cell(row, ci.profit)),
+      HT.num(cell(row, ci.capital)), HT.num(cell(row, ci.rateIn))
     );
-
-    funds.push({
-      code,
+    return {
+      code: cell(row, ci.code).trim(),
       name: cell(row, ci.name).trim(),
-      daily: parseDaily(cell(row, ci.daily)) || 0,
-      cumulative: num(cell(row, ci.cumulative)),
+      daily: HT.parseDaily(cell(row, ci.daily)) || 0,
+      cumulative: HT.num(cell(row, ci.cumulative)),
       amount: snap.amount,
       cost: snap.cost,
-    });
-  }
-  return { funds, snapshotDate };
+    };
+  });
+  return { funds, snapshotDate: t.snapshotDate };
 }
 
 /* ---------- 拉净值 ---------- */
