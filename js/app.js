@@ -29,6 +29,9 @@
   var HOLDINGS_URL = 'data/holdings.md';
   /* 区间收益 + 推算持仓：仓库里预生成的一份，首屏直接有得看 */
   var RETURNS_URL = 'data/returns.json';
+  /* 申购状态 + 单日限额，同样预生成。那个接口认短 User-Agent，浏览器改不了 UA，
+   * 页面里 fetch 一定拿不到，所以只能这样取（见 tools/update-limits.mjs 的说明） */
+  var LIMITS_URL = 'data/limits.json';
   /* 基金净值：天天基金，每只一个 <script>，执行后净值挂在全局变量上 */
   var NAV_URL = 'https://fund.eastmoney.com/pingzhongdata/';
 
@@ -528,6 +531,76 @@
       ' 个交易日估算</p>' + note;
   }
 
+  /* 申购限额：读预生成的 data/limits.json（见 tools/update-limits.mjs）
+   * 存在的意义只有一个——把「定投其实买不进去」这件事摆到脸上：限购失败是静默的，
+   * App 里计划状态照样是「正常」，钱一分没买。判定规则在 js/limit-check.js，脚本共用同一份 */
+  function renderLimits(m, data) {
+    var byCode = (data && data.funds) || null;
+    if (!byCode || !Object.keys(byCode).length) return '';
+
+    var rows = [];
+    m.groups.forEach(function (g) {
+      g.funds.forEach(function (f) {
+        var code = String(f.codes || '').trim();
+        if (!/^\d{6}$/.test(code)) return;
+        var L = byCode[code] || null;
+        rows.push({
+          cat: g.cat, name: f.name, code: code, plan: f.daily, L: L,
+          v: LimitCheck.verdict(f.daily, L)
+        });
+      });
+    });
+    if (!rows.length) return '';
+
+    /* 有问题的排前面：这块是给人看「哪里买不进」的，不该让人自己往下翻 */
+    var order = { bad: 0, warn: 1, flat: 2, ok: 3 };
+    rows.sort(function (a, b) { return order[a.v.key] - order[b.v.key]; });
+
+    var capTxt = function (L) {
+      if (!L) return '—';
+      return L.max == null ? '不限' : fmtMoney(L.max) + ' 元/天';
+    };
+
+    var body = rows.map(function (r) {
+      return '<tr class="lim-row-' + r.v.key + '">' +
+        '<td class="hd-grp-name">' + esc(r.cat) + '</td>' +
+        '<td class="rt-name" title="' + esc(r.name) + '">' + esc(r.name) + '</td>' +
+        '<td class="hd-num">' + esc(r.code) + '</td>' +
+        '<td>' + esc(r.L ? r.L.sgzt : '—') + '</td>' +
+        '<td class="hd-num">' + capTxt(r.L) + '</td>' +
+        '<td class="hd-num">' + (r.plan > 0 ? fmtMoney(r.plan) + ' 元/天' : '—') + '</td>' +
+        '<td class="lim-' + r.v.key + '">' + esc(r.v.txt) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    var bad = rows.filter(function (r) { return r.v.key === 'bad'; }).length;
+    var warn = rows.filter(function (r) { return r.v.key === 'warn'; }).length;
+    var summary = [];
+    if (bad) summary.push(bad + ' 只买不进 / 超限');
+    if (warn) summary.push(warn + ' 只顶格');
+    if (!summary.length) summary.push('全部正常');
+
+    var asOf = data.asOf ? Date.parse(data.asOf) : NaN;
+    return '<div class="hd-section">申购限额 · ' + esc(summary.join('，')) + '</div>' +
+      '<div class="table-wrap"><table class="limits-table"><colgroup>' +
+      '<col style="width:92px"><col style="width:196px"><col style="width:82px">' +
+      '<col style="width:92px"><col style="width:104px"><col style="width:104px">' +
+      '<col style="width:158px"></colgroup><thead><tr>' +
+      '<th>类别</th><th>基金名称</th><th class="hd-num">代码</th>' +
+      '<th>申购状态</th><th class="hd-num">单日上限</th>' +
+      '<th class="hd-num">计划定投</th><th>判定</th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table></div>' +
+      '<p class="hd-note">' + esc(LimitCheck.NOTE) +
+      ' 申购状态由 <code>tools/update-limits.mjs</code> 预生成' +
+      (isNaN(asOf) ? '' : '，取数时间 ' + fmtWhen(asOf)) +
+      '——这个接口认短 User-Agent，浏览器里改不了 UA 拿不到，所以要重新跑脚本才会更新。' +
+      (data.failed && data.failed.length
+        ? ' 本次有 ' + data.failed.length + ' 只没取到：' +
+          data.failed.map(function (f) { return esc(f.code); }).join('、') + '。'
+        : '') +
+      '</p>';
+  }
+
   /* 收益贡献：以 0 为中心向左右延伸的横条，长度按绝对值归一 */
   function renderBars(m) {
     var rows = m.groups.filter(function (g) { return g.cost > 0; })
@@ -760,7 +833,8 @@
   function renderHoldings(tbl, returns) {
     var m = buildModel(tbl, returns);
     return renderOverview(m, returns) + renderCards(m) + renderAlloc(m) +
-      renderBars(m) + renderDca(m) + renderReturns(m, returns) + renderTable(tbl, m);
+      renderBars(m) + renderDca(m) + renderLimits(m, holdings.limits) +
+      renderReturns(m, returns) + renderTable(tbl, m);
   }
 
   /* ---------- 卡片状态机 ---------- */
@@ -883,7 +957,7 @@
 
   /* ---------- 基金持仓 ---------- */
 
-  var holdings = { md: '', tbl: null, snapshotDate: null, derived: null, syncing: false };
+  var holdings = { md: '', tbl: null, snapshotDate: null, derived: null, limits: null, syncing: false };
 
   function fetchMd() {
     return fetch(HOLDINGS_URL, { cache: 'no-cache' }).then(function (res) {
@@ -907,6 +981,10 @@
       /* 区间收益缺文件或格式坏了只该少一个区块，不该拖垮整张持仓卡 */
       fetch(RETURNS_URL, { cache: 'no-cache' })
         .then(function (res) { return res.ok ? res.json() : null; })
+        .catch(function () { return null; }),
+      /* 申购限额同理：缺文件只是少一块「买不进」的警告 */
+      fetch(LIMITS_URL, { cache: 'no-cache' })
+        .then(function (res) { return res.ok ? res.json() : null; })
         .catch(function () { return null; })
     ]).then(function (results) {
       var md = results[0];
@@ -918,6 +996,7 @@
       holdings.md = md;
       holdings.tbl = tbl;
       holdings.snapshotDate = (md.match(SNAPSHOT_RE) || [])[1] || null;
+      holdings.limits = results[2] || null;
 
       /* 上次同步的结果优先：它比仓库里那份新。持仓表改过（比如换了新快照）就作废，
        * 否则会拿旧快照的数去滚 */

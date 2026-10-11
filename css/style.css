@@ -453,6 +453,48 @@ body {
 .returns-table td:first-child { font-weight: 600; }
 .returns-table tbody tr:hover { background: var(--card-soft); }
 
+/* ---- 持仓：申购限额 ---- */
+/* 存在的意义是把「买不进」摆到脸上，所以有问题的行给底色，正常的行保持安静 */
+.limits-table {
+  width: 100%;
+  min-width: 828px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.limits-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .5px;
+  color: var(--text-dim);
+  background: var(--card-soft);
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--card-border);
+  white-space: nowrap;
+}
+
+.limits-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #eef1f7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.limits-table .hd-num { text-align: right; font-variant-numeric: tabular-nums; }
+.limits-table td:first-child { font-weight: 600; }
+.limits-table tbody tr:hover { background: var(--card-soft); }
+
+/* 红＝出事了，和涨跌的红绿无关（绿在这里是「跌」，用来看「正常」会看反） */
+.limits-table tr.lim-row-bad td { background: rgba(217, 43, 43, .06); }
+.limits-table tr.lim-row-warn td { background: rgba(184, 121, 46, .08); }
+
+.lim-bad { color: var(--up); font-weight: 600; }
+.lim-warn { color: #b8792e; font-weight: 600; }
+.lim-ok, .lim-flat { color: var(--text-dim); }
+
 /* ---- 占位卡片 ---- */
 .card-placeholder { border-style: dashed; }
 .placeholder-body {

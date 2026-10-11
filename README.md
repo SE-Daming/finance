@@ -10,6 +10,8 @@
 - **自选基金 / ETF / 股票**：输入 6 位场内代码添加（如 `161725`、`510300`、`600519`），保存在浏览器 localStorage，可随时移除
 - **基金持仓**：读 [data/holdings.md](data/holdings.md) 里的表格，改表即改数据。表里逐只写基金和它的**类别**，看板按类别自动汇总。自上而下是：顶部总览（持有金额 / 累计成本 / 累计收益 / 收益率 / 每日定投）、类别卡片、仓位分布条、收益贡献条形图、定投节奏、基金区间收益、按类别分组带小计的明细表
 - **基金区间收益**：每只基金的 1 日 / 1 周 / 1 月 / 3 月 / 6 月 / 1 年收益率对比表，红涨绿跌
+- **申购限额**：逐只列出申购状态、单日上限，和「每日定投金额」对起来，标出**买不进**（暂停申购）、
+  **超出上限**、**顶格**的基金。QDII 限购会让定投静默失败——App 里计划状态还是「正常」，钱一分没买
 - **持仓推算**：`data/holdings.md` 里的市值是快照，页面显示的是以「快照日期」为锚、按每日定投计划**逐个 A 股交易日**滚到今天的推算值，所以每过一个交易日就往前推一期定投，净值在波动时数字也跟着变。跑偏了粘贴一份新快照重新锚定
 - **同步净值**按钮：点一下，浏览器当场去天天基金拉每只基金的最新净值，把上面那两块重算一遍，结果存在浏览器本地，之后打开页面直接用它。不点就用仓库里预生成的那份
 - 占位模块：收支记录（待接入个人记账数据）
@@ -28,6 +30,10 @@
 两份共用 [js/nav-math.js](js/nav-math.js) 里的同一套算法（浏览器 `<script>` 直接加载，
 Node 用 `require` 读），所以算出来的数一定一样——同一套金额规则写两遍，迟早会算出不一样的结果。
 
+`tools/update-returns.mjs` 和 `tools/update-limits.mjs` 读 holdings.md 的方式也是共用的
+（[js/holdings-table.js](js/holdings-table.js)），「这个定投计划买得进吗」的判定同样只有一份
+（[js/limit-check.js](js/limit-check.js)）——不然控制台和页面迟早会给出不同结论。
+
 所有资源使用相对路径引用，可部署在任意子路径下。
 
 ## 持仓数据怎么改
@@ -36,7 +42,8 @@ Node 用 `require` 读），所以算出来的数一定一样——同一套金�
 
 1. 编辑 `data/holdings.md` 的表格
 2. 跑 `node tools/update-returns.mjs` 刷新仓库里那份净值数据（没网就跳过，页面会少一个区块，不会报错）
-3. 推送，或本地刷新页面
+3. 跑 `node tools/update-limits.mjs` 刷新申购限额（同理，没网就跳过，页面少「申购限额」区块）
+4. 推送，或本地刷新页面
 
 只想知道最新净值、没改表的话，不用跑脚本：打开页面点一下「同步净值」按钮就行。
 
@@ -129,6 +136,33 @@ GitHub Actions 定时任务试过，撤了——用 `GITHUB_TOKEN` 推的提交*
 包括 `pages-build-deployment`，所以那个任务能改仓库里的 JSON，却永远刷新不了线上页面。
 要让它生效得把 Pages 的构建源改成「GitHub Actions」或者配一个 PAT，都不如一个按钮干净。
 
+## 申购限额怎么更新
+
+看板上的「申购限额」区块读 `data/limits.json`，由脚本预生成：
+
+```bash
+node tools/update-limits.mjs
+```
+
+**为什么不能像行情那样实时取？** 三条路都试过了，浏览器里一条都走不通：
+
+| 路径 | 跨域 | 卡不卡浏览器 | 有申购状态 |
+| --- | --- | --- | --- |
+| `fundmobapi.eastmoney.com` 的 JSON 接口 | 带 `Access-Control-Allow-Origin: *` | **卡 User-Agent**：认 `Mozilla/5.0` 这种短 UA，带完整 Chrome UA 会回 `ErrCode 61136403` | 有 |
+| `qt.gtimg.cn/q=jj<代码>`（行情在用） | 不卡 | 不卡 | **没有**，只有 10 个字段 |
+| `fund.eastmoney.com/<代码>.html` | **不带 CORS 头** | 不卡 | 有（网页正文里） |
+
+浏览器不允许改 `User-Agent`，所以「能取的不给数据、给数据的取不到」，只能预生成。
+脚本用 Node 跑就不受这个限制（记得**别**把 UA 换成完整的 Chrome UA）。
+
+脚本逐只查 `SGZT`（申购状态）、`MAXSG`（单日上限）、`BUY`（能不能买），写成
+`data/limits.json`。**判定要以 `BUY` 为准**：有些基金申购状态写着「限大额」、限额写着 `--`，
+`BUY` 却已经是 `false` 了——只看状态和上限都会漏判。
+
+页面据此把每只的计划金额和单日上限对起来，标出三种情况：**买不进**（暂停申购或 `BUY=false`）、
+**超出上限**（计划金额 > 单日上限，当期整个作废）、**顶格**（正好等于上限，一点余量都没有）。
+限购失败是**静默**的：App 里计划状态照旧显示「正常」，钱一分没买——这就是这块存在的理由。
+
 ## 本地运行
 
 ```bash
@@ -146,6 +180,7 @@ npx http-server -p 8080
 | 交易日历 | 同上（取每行的日期字段，即上证指数的交易日） | 页面、`tools/update-returns.mjs`（推算持仓按它步进） |
 | 场外基金净值 | `https://qt.gtimg.cn/q=jj160213` | 页面（只用来查代码，不取历史） |
 | 基金净值走势 | `https://fund.eastmoney.com/pingzhongdata/160213.js` | 页面（同步净值按钮）、`tools/update-returns.mjs` |
+| 申购状态 / 单日限额 | `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNNBasicInformation?FCODE=160213` | `tools/update-limits.mjs`（**浏览器取不到**：卡短 UA，见「申购限额怎么更新」） |
 | 基金代码搜索 | `https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=<name>` | 手工查代码用 |
 
 腾讯的场外基金接口（`jj` 前缀）只给最新净值，`day` 数组是空的，取不到历史——
