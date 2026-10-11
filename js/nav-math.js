@@ -110,13 +110,16 @@
 
     var lastIdx = n - 1;
     var navDate = trend[lastIdx].date;
-    var out = { navDate: navDate, r1d: round2(trend[lastIdx].eq) };
+    var out = { navDate: navDate, r1d: round2(trend[lastIdx].eq), start: {} };
 
     for (var i = 0; i < WINDOWS.length; i++) {
       var win = WINDOWS[i][1];
       var target = win.days ? shiftDays(navDate, win.days) : shiftMonths(navDate, win.months);
       var idx = lastIndexUpTo(trend, target);
       out[WINDOWS[i][0]] = idx >= 0 ? round2(compound(trend, idx + 1, lastIdx)) : null;
+      /* 该区间真正复利的起点。长假之后 7 天窗口里可能只公布了一期净值，于是「1周」
+       * 和「1日」数字相同——那不是算错，把起点摆出来页面上就不用猜了 */
+      out.start[WINDOWS[i][0]] = idx >= 0 && idx + 1 <= lastIdx ? trend[idx + 1].date : null;
     }
     return out;
   }
@@ -219,6 +222,7 @@
         navDate: r.navDate,
         r1d: r.r1d, r1w: r.r1w, r1m: r.r1m,
         r3m: r.r3m, r6m: r.r6m, r1y: r.r1y,
+        start: r.start,               // 各区间实际起点日期，见 computeReturns
         projected: p || null          // 没有就是 null，别省掉这个键：前端按形状取值
       };
       if (r.navDate) navDates.push(r.navDate);

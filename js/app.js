@@ -377,7 +377,8 @@
           g.cost += fund.cost != null ? fund.cost : fund.amount - fund.profit;
         }
       } else if (!isPlan) {
-        excluded.push(cat);                     // 既没市值也没本金 → 不计入总额
+        /* 算不出市值 → 不计入总额。只记下是哪一行，文案里不去断言它缺了什么 */
+        excluded.push({ cat: cat, name: cellOf(row, ci.name) });
       }
     });
 
@@ -420,9 +421,13 @@
         '</div>';
     }).join('');
 
+    /* 文案只说「算不出市值」这件事，不替用户判断缺的是哪一格：填了「投入本金」
+     * 但没填「持有收益」的行同样算不出市值，那时候说「也没有投入本金」就是错的 */
     var note = m.excluded.length
-      ? '<p class="hd-note">未计入总额：' + m.excluded.map(esc).join('、') +
-        '（该行既没填持有金额，也没有投入本金）</p>'
+      ? '<p class="hd-note">未计入总额：' + m.excluded.map(function (e) {
+          return esc(e.name || e.cat);
+        }).join('、') +
+        '——市值算不出来，需要「持有金额」，或者「投入本金」和「持有收益」两个都填。</p>'
       : '';
 
     /* 有推算持仓时，上面这几个数字都不是表里写的快照了，必须说清楚 */
@@ -715,8 +720,14 @@
         var r = /^\d{6}$/.test(code) ? byCode[code] : null;
         if (!r) return;                      // 没代码 / 没取到净值 → 不出现，也不占位
         shown++;
-        /* 悬停能看见接口认的是哪只基金——代码填错时会取到别人的净值，这是唯一能当场发现的地方 */
+        /* 悬停能看见接口认的是哪只基金——代码填错时会取到别人的净值，这是唯一能当场发现的地方。
+         * 顺便列出各区间起点：长假后「1周」可能和「1日」同值，看起点就知道那一周里
+         * 只公布了一期净值，不是算错 */
+        var starts = RETURN_COLS.map(function (c) {
+          return r.start && r.start[c.key] ? c.label + ' 自 ' + r.start[c.key] : '';
+        }).filter(Boolean).join(' · ');
         var tip = '净值日期 ' + (r.navDate || '—') +
+          (starts ? ' · 区间起点 ' + starts : '') +
           (r.name && r.name !== f.name ? ' · 接口返回：' + r.name : '');
         rows += '<tr title="' + esc(tip) + '">' +
           '<td class="hd-grp-name">' + (first ? esc(g.cat) : '') + '</td>' +
@@ -742,7 +753,8 @@
       '<div class="table-wrap"><table class="returns-table">' +
       '<thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>' +
       '<p class="hd-note">按官方日涨跌幅逐日复利，已含分红再投。QDII 净值晚一天，' +
-      '每行悬停可看自己的净值日期。' + src + '，不是实时行情。</p>';
+      '每行悬停可看自己的净值日期和各区间起点。长假之后「1周」可能和「1日」相同——' +
+      '那一周里只公布了一期净值，不是算错。' + src + '，不是实时行情。</p>';
   }
 
   function renderHoldings(tbl, returns) {
