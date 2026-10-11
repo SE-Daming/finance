@@ -1,0 +1,4 @@
+# 行尾统一成 LF，别跟着各人 core.autocrlf 的设置变。
+# tools/update-returns.mjs 每次跑都会重写 data/returns.json，如果 checkout 时被换成
+# CRLF、脚本又写成 LF，这个文件的行尾就会来回翻，diff 里全是噪声。
+* text=auto eol=lf
