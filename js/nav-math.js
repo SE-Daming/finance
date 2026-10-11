@@ -130,8 +130,11 @@
    *
    *   锚点净值 nav0 = 快照日期当天（或之前最近一天）的净值
    *   份额 shares = 快照市值 ÷ nav0          ← 快照那天的份额
-   *   之后每过一个交易日，就按每日定投买进 金额 ÷ 当日净值 份，成本同步累加
+   *   快照日期之后每过一个交易日，就按每日定投买进 金额 ÷ 当日净值 份，成本同步累加
    *   推算市值 = 最终份额 × 最新净值
+   *
+   * 「快照日期之后」而不是「锚点净值日之后」：快照里的份额和成本已经是截至快照日期的数，
+   * QDII 净值晚一天时两者会差一个交易日，拿锚点净值日当界会把那一期定投重复算一遍。
    *
    * 为什么不能只拿「快照市值 × 区间涨幅」：那等于假设新投的钱在期初就到位了。
    * 定投是一天天买进去的，越晚买的钱吃到的涨幅越少——尤其回调行情里差别明显。
@@ -159,11 +162,21 @@
     var daily = snap.daily > 0 ? snap.daily : 0;
     var anchorDate = trend[anchorIdx].date;
 
+    /* 定投从「快照日期」之后开始补，不是从锚点净值日之后。
+     *
+     * 快照里的份额和成本已经是截至快照日期的数，所以只该补它之后的期数。拿锚点净值日当界
+     * 会多算一期：QDII 净值普遍晚一天，快照日期是周五时锚点净值日还停在周四，那个周五
+     * 就落在两者之间——钱确实扣了（App 的总成本里有），可推算又会补一次。
+     *
+     * 这里刻意不用 anchorDate：它只负责把快照市值换算成份额（latestNav 是几号，市值就是按
+     * 几号的净值算的），而定投该补到哪天，取决于用户是从哪天抄的数字。 */
+    var cutoff = snap.snapshotDate;
+
     if (daily && days && days.length) {
       var navIdx = anchorIdx;
       for (var i = 0; i < days.length; i++) {
         var d = days[i];
-        if (d <= anchorDate) continue;
+        if (d <= cutoff) continue;
         /* 买入价 = 不晚于 d 的最新净值；d 当天还没公布的，就沿用前一天的 */
         while (navIdx + 1 < trend.length && trend[navIdx + 1].date <= d) navIdx++;
         shares += daily / trend[navIdx].nav;
