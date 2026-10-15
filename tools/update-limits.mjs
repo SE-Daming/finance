@@ -71,11 +71,17 @@ function normalize(d) {
     name: d.SHORTNAME || '',
     sgzt: d.SGZT || '',                       // 申购状态：开放申购 / 限大额 / 暂停申购
     shzt: d.SHZT || '',                       // 赎回状态，顺手记下
+    /* 销售标记：「暂不销售」= 天天基金不卖这只（D 份额常见）。判定的依据是
+     * js/limit-check.js，它拿这个把「天天基金买不到」和「基金买不进」区分开 */
+    salemar: d.SALEMARK || '',
     /* buy 是「能不能买」最可靠的信号：有些基金申购状态写着「限大额」、限额写着 "--"，
      * 但 BUY 已经是 false。光看 sgzt 和 max 都会漏判，所以单独存下来 */
     buy: d.BUY === true,
     min: toNum(d.MINSG),
     max: max == null || max >= LimitCheck.UNLIMITED ? null : max,
+    /* MAXSG 是 "--" 时上面算出来也是 null，但那不是「不限购」，是接口没给数字。
+     * 两者在页面上必须分开显示，否则「限大额 + 上限不明」会被读成「想买多少买多少」 */
+    maxKnown: max != null,
   };
 }
 
@@ -129,7 +135,11 @@ const list = t.codes.map((code) => {
   return { code, name: (L && L.name) || '', L, plan: plan[code] || 0, v: LimitCheck.verdict(plan[code] || 0, L) };
 }).sort((a, b) => order[a.v.key] - order[b.v.key]);
 
-const capTxt = (L) => (L == null ? '—' : (L.max == null ? '不限' : L.max + ' 元/天'));
+const capTxt = (L) => {
+  if (L == null) return '—';
+  if (L.max != null) return L.max + ' 元/天';
+  return L.maxKnown === false ? '不明' : '不限';
+};
 console.log('代码     申购状态     单日上限     计划      判定        基金名称');
 console.log('─'.repeat(92));
 for (const r of list) {

@@ -558,7 +558,10 @@
 
     var capTxt = function (L) {
       if (!L) return '—';
-      return L.max == null ? '不限' : fmtMoney(L.max) + ' 元/天';
+      if (L.max != null) return fmtMoney(L.max) + ' 元/天';
+      /* max 为空有两种：真的不限购，和「限大额但接口没给数字」。后者写成「不限」会让人
+       * 以为想买多少买多少——判定那列已经在说「上限不明」了，这列得跟上 */
+      return L.maxKnown === false ? '不明' : '不限';
     };
 
     var body = rows.map(function (r) {
