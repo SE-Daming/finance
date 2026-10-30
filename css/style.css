@@ -345,6 +345,27 @@ body {
 /* ---- 持仓明细表 ---- */
 .table-wrap { overflow-x: auto; margin: 0 -4px; }
 
+/* ---- 表头吸顶 ----
+ * 三张长表（持仓明细 / 基金区间收益 / 申购限额）滚到下面时，表头跟着走。
+ *
+ * 这里的坑：position: sticky 只对「最近的滚动容器」生效。.table-wrap 为了窄屏横向滚动
+ * 设了 overflow-x: auto，而 CSS 规定一个轴不是 visible 时另一个轴会跟着变成 auto——
+ * 于是它同时成了纵向滚动容器，而它的高度正好裹住表格、纵向根本不滚，sticky 就永远不触发。
+ *
+ * 所以宽屏（横向本来不需要滚）时把 overflow 放开，让 sticky 直接对页面视口生效；
+ * 窄屏保留横向滚动，代价是吸顶不生效——两害相权，窄屏能左右滑更重要。
+ * 1160px 这个值不是拍的：.grid 上限 1080px，减去卡片左右内边距 36px、加上 .table-wrap
+ * 的 -4px 外扩，剩 1052px，刚好容下最宽的持仓明细表（min-width 1044px）。 */
+.table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+@media (min-width: 1160px) {
+  .table-wrap { overflow: visible; }
+}
+
 .holdings-table {
   width: 100%;
   min-width: 1044px;
