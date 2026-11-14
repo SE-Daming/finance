@@ -33,6 +33,11 @@
 
   var round2 = function (v) { return Math.round(v * 100) / 100; };
 
+  /* 曲线点存 4 位小数，不是为了好看：只存 2 位的话，曲线值到 190 多时单点是 ±0.005 的
+   * 误差，两点一比就是 0.005% 的偏差——「最近 7 天」的涨跌会和「基金区间收益」的 1周
+   * 差出 0.01 个百分点，看起来像算错了。4 位刚好压到显示精度以下。 */
+  var round4 = function (v) { return Math.round(v * 10000) / 10000; };
+
   /* 时间戳是北京时间当天零点，直接用 toISOString 会倒回前一天，所以先补 8 小时 */
   function toDate(ms) {
     return new Date(ms + 8 * 3600 * 1000).toISOString().slice(0, 10);
@@ -123,7 +128,7 @@
     for (var i = 0; i < trend.length; i++) {
       var t = trend[i];
       idx = idx * (1 + (t.eq || 0) / 100);
-      if (t.date >= from) out.push([t.date, round2(idx)]);
+      if (t.date >= from) out.push([t.date, round4(idx)]);
     }
     return out;
   }

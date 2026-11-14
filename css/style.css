@@ -497,7 +497,7 @@ body {
 
 .dd-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 840px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;

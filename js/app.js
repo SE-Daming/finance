@@ -944,6 +944,42 @@
     sel.value = dd.scope;
   }
 
+  /* 这块最容易让人以为算错了的地方：同一只基金，「区间收益」的 1月 和这里的 30 天
+   * 数字对不上。不是算错——前者按日历月回溯（一个月前的同一天），后者按天数回溯，
+   * 起算点差一个交易日，差的就是那一天。
+   *
+   * 不写死日期（数据一更新就过期），而是拿一只净值日正好等于 asOf 的基金当场推：
+   *   月窗口的起算收盘 = 不晚于「一个月前」的那个净值日
+   *   这里 N 天的起算收盘 = 不早于「N 天前」的那个净值日（就是表里的「窗口起点」）
+   * 7 天和上面的 1周 是同一个口径，直接说数字应当一致。 */
+  var DD_MONTH_PAIR = { 30: ['1月', 1], 90: ['3月', 3], 180: ['6月', 6], 360: ['1年', 12] };
+
+  function ddAlignNote(rows) {
+    var asOf = dd.data && dd.data.asOf;
+    if (!asOf) return '';
+    if (dd.days === 7) return ' 「7 天」和上面「1周」是同一个窗口，两个数应当完全一样。';
+
+    var pair = DD_MONTH_PAIR[dd.days];
+    if (!pair) return '';
+
+    var target = NavMath.shiftMonths(asOf, pair[1]);
+    for (var i = 0; i < rows.length; i++) {
+      var d = rows[i].d;
+      var f = dd.data.funds[rows[i].r.code];
+      var s = f && f.series;
+      if (!s || d.to !== asOf) continue;          // 用一只净值日已到 asOf 的基金当例子
+
+      var base = null;
+      for (var j = 0; j < s.length; j++) if (s[j][0] <= target) base = s[j][0];
+      if (!base || base === d.from) return '';
+
+      return ' 跟上面「' + pair[0] + '」对一下就知道差在哪：它从 ' + ddDate(base) + ' 收盘起算，' +
+        '这里的 ' + dd.days + ' 天从 ' + ddDate(d.from) + ' 收盘起算——中间那几天的涨跌，' +
+        '一边算了一边没算。';
+    }
+    return '';
+  }
+
   function renderDD() {
     var el = document.querySelector('#card-dd .card-body');
     if (!el) return;
@@ -986,34 +1022,42 @@
           (r.own ? '<button class="remove-btn dd-remove" type="button" data-code="' +
             esc(r.code) + '" title="不再看这只">✕</button>' : '') +
         '</td>' +
-        '<td class="hd-num dd-mdd' + (d.mdd > 0 ? '' : ' dd-zero') + '">' + ddPct(d.mdd) + '</td>' +
+        '<td class="hd-num dd-mdd' + (d.mdd > 0 ? '' : ' dd-zero') + '">' +
+          (d.mdd > 0 ? '-' : '') + ddPct(d.mdd) + '</td>' +
         '<td class="hd-num ' + clsOf(d.ret) + '">' + (d.ret == null ? '—' : fmtRate(d.ret)) + '</td>' +
         '<td class="hd-num">' + (d.peakDate
           ? '<span title="' + esc(d.peakDate + ' 高点 → ' + d.troughDate + ' 低点') + '">' +
             ddDate(d.peakDate) + ' → ' + ddDate(d.troughDate) + '</span>'
           : '—') + '</td>' +
-        '<td class="hd-num ' + (d.curDD > 0 ? 'down' : 'flat') + '">' + ddPct(d.curDD) + '</td>' +
+        '<td class="hd-num' + (d.curDD > 0 ? ' down' : ' flat') + '">' +
+          (d.curDD > 0 ? '-' : '') + ddPct(d.curDD) + '</td>' +
+        /* 窗口起点单独摆出来：上面的「1月 / 3月」是日历月，这里的 N 天差的是起点这一天 */
+        '<td class="hd-num" title="' + esc(d.from + ' 收盘 → ' + d.to + ' 收盘') + '">' +
+          ddDate(d.from) + '</td>' +
         '</tr>';
     }).join('');
 
     var head = '<tr><th>类别</th><th>基金名称</th><th class="hd-num">代码</th>' +
       '<th class="hd-num">最大回撤</th><th class="hd-num">区间涨跌</th>' +
-      '<th class="hd-num">高 → 低</th><th class="hd-num">距峰值</th></tr>';
+      '<th class="hd-num">高 → 低</th><th class="hd-num">距峰值</th>' +
+      '<th class="hd-num">窗口起点</th></tr>';
 
     el.innerHTML =
       '<div class="hd-section">最近 ' + dd.days + ' 天 · ' + rows.length + ' 只 · 最深 ' +
-        esc(worst.r.name) + ' ' + ddPct(worst.d.mdd) + '</div>' +
+        esc(worst.r.name) + ' -' + ddPct(worst.d.mdd) + '</div>' +
       '<div class="table-wrap"><table class="dd-table"><colgroup>' +
-        '<col style="width:86px"><col><col style="width:88px"><col style="width:88px">' +
-        '<col style="width:84px"><col style="width:124px"><col style="width:84px">' +
-        '</colgroup>' +
+        '<col style="width:88px"><col><col style="width:82px"><col style="width:82px">' +
+        '<col style="width:78px"><col style="width:116px"><col style="width:76px">' +
+        '<col style="width:72px"></colgroup>' +
         '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
       '<p class="hd-note">只看窗口内：<b>峰只取窗口里的点</b>，谷是峰之后的低点。' +
         '拿窗口之前的最高点来算，得出的其实是「从以前某个高点跌到今天跌了多少」，' +
         '窗口里明明在涨也会被标成深回撤。' +
-        '回撤按<b>复权净值</b>算（含分红再投），和上面的区间收益同一套口径；' +
-        '「区间涨跌」是窗口首尾的涨跌幅，跌完又涨回来时它会接近 0，而回撤照样很深；' +
-        '「距峰值」是现在的净值距窗口内最高点还有多少，接近 0 说明还在高位。' +
+        '回撤按<b>复权净值</b>算（含分红再投）。「区间涨跌」是窗口首尾的涨跌幅，' +
+        '「最大回撤」「距峰值」是跌了多少——跌完又涨回来时，涨跌可能接近 0，回撤照样很深。' +
+        '和上面「基金区间收益」的 1月 / 3月 / 6月 / 1年 差一点点是正常的：那几列按<b>日历月</b>回溯，' +
+        '这里按<b>天数</b>回溯，起算点通常差一个交易日（每行最后一列就是这里的起算点）。' +
+        ddAlignNote(rows) +
         '带「不足」的是成立还不到 ' + dd.days + ' 天的基金，窗口没铺满，别直接和老基金比。' +
         '净值截至 ' + esc((dd.data && dd.data.asOf) || '—') + '，QDII 普遍比 A 股晚一天。</p>' +
       ddFailedNote();
@@ -1248,8 +1292,9 @@
    */
 
   /* v2：v1 缓存里的 payload 没有复权曲线（series），留着会让「区间最大回撤」整块空掉。
-   * 换个键等于让老缓存自然作废，比在里面加版本判断简单。 */
-  var SYNC_KEY = 'finance-nav-sync-v2';
+   * v3：曲线点从 2 位小数改成 4 位（见 nav-math.js 的 round4），老缓存会让「7 天」和
+   *     「1周」差出 0.01 个百分点。换个键等于让老缓存自然作废，比在里面加版本判断简单。 */
+  var SYNC_KEY = 'finance-nav-sync-v3';
   /* 一次拉几只。二十多只并发全开会把连接占满，太贪反而慢 */
   var SYNC_CONCURRENCY = 4;
   var NAV_RETRIES = 2;
