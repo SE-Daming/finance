@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>我的理财看板</title>
   <meta name="description" content="个人理财数据看板：大盘指数、外汇黄金、自选基金，数据来自公开接口">
-  <link rel="stylesheet" href="css/style.css">
+  <!-- 资源后面挂 ?v=：GitHub Pages 的静态文件缓存 10 分钟，改了 CSS 却没改文件名时，
+       新 HTML 配上旧 CSS 会把页面搞坏（回撤曲线就因此被画成黑块）。改动 CSS / JS 后
+       重新部署时把这里的版本号一起改掉，新 HTML 就会去取新的文件。 -->
+  <link rel="stylesheet" href="css/style.css?v=2026-11-14a">
 </head>
 <body>
   <header class="topbar">
@@ -92,8 +95,8 @@
     <p>数据来源：腾讯财经公开行情接口，仅供个人参考，不构成投资建议。</p>
   </footer>
 
-  <script src="js/nav-math.js"></script>
-  <script src="js/limit-check.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/nav-math.js?v=2026-11-14a"></script>
+  <script src="js/limit-check.js?v=2026-11-14a"></script>
+  <script src="js/app.js?v=2026-11-14a"></script>
 </body>
 </html>

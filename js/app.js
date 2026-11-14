@@ -1100,7 +1100,10 @@
     var grid = '', yticks = '';
     for (var t = Math.ceil(ymin / step) * step; t <= ymax + 1e-9; t += step) {
       var ty = yf(t);
+      /* stroke 之类写成属性而不是只靠 CSS：万一 CSS 没加载上（版本没对齐、缓存没刷），
+         折线默认是黑色填充，会画成一坨黑块。属性优先级低于 CSS，正常时照样听 CSS 的 */
       grid += '<line x1="0" y1="' + ty.toFixed(2) + '" x2="100" y2="' + ty.toFixed(2) + '"' +
+        ' stroke="#eef1f7" stroke-width="1"' +
         ' class="dd-grid' + (Math.abs(t) < 1e-9 ? ' dd-grid-zero' : '') +
         '" vector-effect="non-scaling-stroke"/>';
       /* 浮点累加会攒出 4.999999999，先收一下 */
@@ -1118,7 +1121,7 @@
 
     lanes.forEach(function (ln) {
       var d = ln.row.d;
-      lines += '<polyline class="dd-line" stroke="' + ln.color + '"' +
+      lines += '<polyline class="dd-line" fill="none" stroke="' + ln.color + '" stroke-width="1.8"' +
         ' vector-effect="non-scaling-stroke" points="' +
         ln.pts.map(function (p) { return p.x.toFixed(2) + ',' + yf(p.v).toFixed(2); }).join(' ') +
         '"/>';
@@ -1166,7 +1169,8 @@
 
     return '<div class="dd-chart">' +
       '<div class="dd-chart-lg">' + legend + '</div>' +
-      '<div class="dd-plot"><svg class="dd-svg" viewBox="0 0 100 100" preserveAspectRatio="none">' +
+      '<div class="dd-plot"><svg class="dd-svg" viewBox="0 0 100 100" preserveAspectRatio="none"' +
+        ' width="100%" height="230">' +
         grid + lines + '</svg>' + yticks + marks + '</div>' +
       '<div class="dd-xaxis">' + xticks + '</div>' +
       '<p class="dd-chart-cap">曲线是窗口内的复权净值，起点＝0%。虚线标的是每只回撤最深的一段：' +
