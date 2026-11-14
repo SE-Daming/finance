@@ -537,6 +537,96 @@ body {
 }
 .dd-remove { padding: 0 4px; font-size: 12px; }
 
+/* ---- 持仓：回撤曲线的图 ---- */
+/* 表格给数字，图给形状：曲线从窗口起点归零，竖虚线是「高点 → 低点」那一段跌幅。
+ * 结构上有意把坐标轴文字放在 SVG 外面——SVG 用 preserveAspectRatio="none" 拉伸铺满，
+ * 里面的文字会跟着变形。 */
+.dd-chart { margin: 2px 0 16px; }
+.dd-chart-lg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.dd-chart-lg span { display: inline-flex; align-items: center; gap: 6px; }
+.dd-chart-lg i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.dd-chart-lg b { color: var(--down); font-variant-numeric: tabular-nums; }
+.dd-chart-lg em { font-style: normal; }
+
+.dd-plot {
+  position: relative;
+  height: 230px;
+  margin-left: 46px;
+}
+.dd-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.dd-grid { stroke: #eef1f7; stroke-width: 1; }
+.dd-grid-zero { stroke: #cfd8e6; stroke-dasharray: 4 3; }
+.dd-line { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+
+/* 纵轴刻度：贴着图左边缘往外排，不用进 SVG 里 */
+.dd-ytick {
+  position: absolute;
+  right: 100%;
+  margin-right: 8px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dd-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid currentColor;
+  background: #fff;
+}
+.dd-dot.dd-trough { background: currentColor; }
+.dd-drop { position: absolute; width: 0; border-left: 1px dashed; opacity: .5; }
+.dd-mtag {
+  position: absolute;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-xaxis { position: relative; height: 15px; margin: 6px 0 0 46px; }
+.dd-xtick {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.dd-xtick:first-child { transform: none; }
+.dd-xtick:last-child { transform: translateX(-100%); }
+.dd-chart-cap { margin: 8px 0 0; font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+
+/* 表里画着曲线的那几只：行首一个同色小圆点，行底色也淡一点 */
+.dd-swatch {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+.dd-table tbody tr { cursor: pointer; }
+.dd-table tbody tr.dd-on { background: rgba(59, 111, 212, .05); }
+
+@media (max-width: 620px) {
+  .dd-plot { height: 180px; margin-left: 38px; }
+  .dd-xaxis { margin-left: 38px; }
+  .dd-xt-mid { display: none; }     /* 窄屏只留起止两个日期，不然挤成一团 */
+}
+
 /* ---- 持仓：申购限额 ---- */
 /* 存在的意义是把「买不进」摆到脸上，所以有问题的行给底色，正常的行保持安静 */
 .limits-table {

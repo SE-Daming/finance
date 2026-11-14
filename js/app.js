@@ -866,6 +866,8 @@
     custom: [],      // 自己加的代码，存在浏览器本地
     cache: {},       // 现拉的：code → {name, series}
     failed: {},      // 现拉失败的：code → 原因
+    pick: null,      // 曲线上画哪几只；null 表示还没选过（用默认两只）
+    rows: [],        // 最近一次渲染的可见行，切曲线时用来判断当前选了谁
     data: null,      // returns.json，或「同步净值」的结果
     tbl: null        // 持仓表，用来给每只基金配上类别
   };
@@ -980,6 +982,200 @@
     return '';
   }
 
+  /* ---------- 窗口内的曲线 ----------
+   *
+   * 表格只能给数字，而这块最容易看拧的恰恰是两件事：
+   *   「区间涨跌」和「最大回撤」不是一回事——跌完又涨回来，涨跌接近 0，回撤照样很深
+   *   起点差一天，同一个窗口的数字就差一截（「1月」按日历月、「30 天」按天数）
+   * 画出来就一眼看明白：曲线从窗口起点归零，纵轴是百分比，和表格里的数字直接对得上；
+   * 虚线标出每只回撤最深的那一段（窗口内高点到低点），那一段就是「最大回撤」。
+   *
+   * 默认画 008164 和 025857：一只跌完涨回来、一只真的在跌，一涨一跌正好当反例。
+   * 点表格的行可以换基金。选了什么存在浏览器本地，刷新还在。
+   */
+
+  var DD_PICK_KEY = 'finance-dd-pick';
+  var DD_PICK_DEFAULT = ['008164', '025857'];
+  var DD_PICK_MAX = 4;
+  /* 刻意避开红绿：这两个颜色在别处表示涨跌，曲线本身不分好坏 */
+  var DD_CHART_COLORS = ['#3b6fd4', '#c0568f', '#4aa8a0', '#e08a3c'];
+
+  function getDdPick() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(DD_PICK_KEY));
+      if (Array.isArray(saved)) {
+        return saved.filter(function (c) { return /^\d{6}$/.test(c); }).slice(0, DD_PICK_MAX);
+      }
+    } catch (e) { /* 忽略损坏数据 */ }
+    return null;                       // 没存过 → 用默认那两只
+  }
+
+  function setDdPick(list) {
+    try { localStorage.setItem(DD_PICK_KEY, JSON.stringify(list)); } catch (e) { /* 存不下就算了 */ }
+  }
+
+  /* 曲线上画哪几只：点过就用他点的，没点过用默认两只。
+   * 点过的那几只被「范围」筛掉了就不画——换成别的基金，会让人以为自己的选择没生效 */
+  function ddPicked(rows) {
+    var byCode = {};
+    rows.forEach(function (x) { byCode[x.r.code] = x; });
+
+    if (dd.pick == null) {
+      var def = DD_PICK_DEFAULT
+        .map(function (c) { return byCode[c]; })
+        .filter(Boolean);
+      return (def.length ? def : rows.slice(0, 2)).slice(0, DD_PICK_MAX);
+    }
+    return dd.pick
+      .map(function (c) { return byCode[c]; })
+      .filter(Boolean)
+      .slice(0, DD_PICK_MAX);
+  }
+
+  function ddTogglePick(code) {
+    var cur = ddPicked(dd.rows || []).map(function (x) { return x.r.code; });
+    var at = cur.indexOf(code);
+    if (at >= 0) cur.splice(at, 1);
+    else {
+      cur.push(code);
+      if (cur.length > DD_PICK_MAX) cur.shift();   // 满了就顶掉最早加的那只
+    }
+    dd.pick = cur;
+    setDdPick(cur);
+    renderDD();
+  }
+
+  /* SVG 只画折线和网格：viewBox 固定 0~100，preserveAspectRatio="none" 让它自动占满宽度，
+   * 线宽用 vector-effect 保持 1px 不跟着拉伸。点、文字用绝对定位的 HTML——
+   * 放进会拉伸的 SVG 里会变成椭圆和胖字。 */
+  function ddChart(rows) {
+    var picked = ddPicked(rows);
+    if (!picked.length) {
+      /* 用户把曲线全删了 / 选的那几只被「范围」筛掉了：留一句话，别让图无声消失 */
+      if (dd.pick && !dd.pick.length) {
+        return '<p class="dd-chart-cap">点表格里任意一行，把它的窗口曲线画出来看看。</p>';
+      }
+      if (dd.pick && dd.pick.length) {
+        return '<p class="dd-chart-cap">曲线里选的那几只不在当前「范围」里，点表格里的行换一批。</p>';
+      }
+      return '';
+    }
+
+    var x0 = picked[0].d.from, x1 = picked[0].d.to;
+    picked.forEach(function (x) {
+      if (x.d.from < x0) x0 = x.d.from;
+      if (x.d.to > x1) x1 = x.d.to;
+    });
+    var t0 = Date.parse(x0), t1 = Date.parse(x1);
+    var tSpan = (t1 - t0) || 1;
+
+    var lo = 0, hi = 0, lanes = [];
+    picked.forEach(function (x, i) {
+      var base = null, pts = [];
+      x.r.series.forEach(function (p) {
+        if (p[0] < x.d.from || p[0] > x.d.to) return;
+        if (base == null) base = p[1];
+        var v = (p[1] / base - 1) * 100;              // 相对窗口起点涨了/跌了多少（%）
+        pts.push({ date: p[0], v: v, x: ((Date.parse(p[0]) - t0) / tSpan) * 100 });
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      });
+      if (pts.length < 2) return;
+      lanes.push({ row: x, pts: pts, color: DD_CHART_COLORS[i % DD_CHART_COLORS.length] });
+    });
+    if (!lanes.length) return '';
+
+    /* 纵轴留一点白，浅跌浅涨时不至于贴着边框 */
+    var pad = Math.max((hi - lo) * 0.14, 0.5);
+    var ymin = lo - pad, ymax = hi + pad;
+    function yf(v) { return 100 - ((v - ymin) / (ymax - ymin)) * 100; }
+
+    /* 刻度步长取 0.5 / 1 / 2 / 2.5 / 5 / 10…，让刻度别超过 6 条 */
+    var steps = [0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100];
+    var step = 100;
+    for (var s = 0; s < steps.length; s++) {
+      if ((ymax - ymin) / steps[s] <= 6) { step = steps[s]; break; }
+    }
+
+    var grid = '', yticks = '';
+    for (var t = Math.ceil(ymin / step) * step; t <= ymax + 1e-9; t += step) {
+      var ty = yf(t);
+      grid += '<line x1="0" y1="' + ty.toFixed(2) + '" x2="100" y2="' + ty.toFixed(2) + '"' +
+        ' class="dd-grid' + (Math.abs(t) < 1e-9 ? ' dd-grid-zero' : '') +
+        '" vector-effect="non-scaling-stroke"/>';
+      /* 浮点累加会攒出 4.999999999，先收一下 */
+      var tv = Math.round(t * 100) / 100;
+      yticks += '<span class="dd-ytick" style="top:' + ty.toFixed(2) + '%">' +
+        (tv > 0 ? '+' : '') + tv + '%</span>';
+    }
+
+    var lines = '', marks = '', legend = '';
+
+    function at(lane, date) {
+      for (var i = 0; i < lane.pts.length; i++) if (lane.pts[i].date === date) return lane.pts[i];
+      return null;
+    }
+
+    lanes.forEach(function (ln) {
+      var d = ln.row.d;
+      lines += '<polyline class="dd-line" stroke="' + ln.color + '"' +
+        ' vector-effect="non-scaling-stroke" points="' +
+        ln.pts.map(function (p) { return p.x.toFixed(2) + ',' + yf(p.v).toFixed(2); }).join(' ') +
+        '"/>';
+
+      var pk = at(ln, d.peakDate), tr = at(ln, d.troughDate);
+      if (pk && tr && d.mdd > 0) {
+        /* 高点到低点那一段：竖虚线 + 两个点 + 跌幅标注，正好是表里的「最大回撤」 */
+        marks += '<i class="dd-drop" style="left:' + tr.x.toFixed(2) + '%;top:' + yf(pk.v).toFixed(2) +
+          '%;height:' + (yf(tr.v) - yf(pk.v)).toFixed(2) + '%;border-left-color:' + ln.color + '"></i>' +
+          '<i class="dd-dot" style="left:' + pk.x.toFixed(2) + '%;top:' + yf(pk.v).toFixed(2) +
+          '%;color:' + ln.color + '" title="' + esc(pk.date + ' 高点') + '"></i>' +
+          '<i class="dd-dot dd-trough" style="left:' + tr.x.toFixed(2) + '%;top:' + yf(tr.v).toFixed(2) +
+          '%;color:' + ln.color + '" title="' + esc(tr.date + ' 低点') + '"></i>';
+
+        /* 标注压在谷点正下方——放右边会和曲线打架；贴着左右边缘时往里收，别被裁掉 */
+        var shift = tr.x < 6 ? 'translate(-6px,11px)'
+          : tr.x > 94 ? 'translate(calc(-100% + 6px),11px)'
+          : 'translate(-50%,11px)';
+        marks += '<span class="dd-mtag" style="left:' + tr.x.toFixed(2) + '%;top:' +
+          yf(tr.v).toFixed(2) + '%;color:' + ln.color + ';transform:' + shift + '">-' +
+          ddPct(d.mdd) + '</span>';
+      }
+
+      legend += '<span><i style="background:' + ln.color + '"></i>' + esc(ln.row.r.name) +
+        ' <b>-' + ddPct(d.mdd) + '</b>' +
+        ' <em>区间 ' + (d.ret == null ? '—' : fmtRate(d.ret)) + '</em></span>';
+    });
+
+    /* 横轴只标起止和中间两格，日期取第一只基金的真实净值日（位置按日期算）。
+     * 窗口短的时候中间两格会挤在相邻的交易日上，离得太近就丢掉一个 */
+    var f0 = lanes[0].pts, n0 = f0.length - 1;
+    var ends = [0, n0], mids = [Math.round(0.34 * n0), Math.round(0.67 * n0)];
+    var keep = ends.slice();
+    mids.forEach(function (k) {
+      if (keep.indexOf(k) !== -1) return;
+      var far = keep.every(function (q) { return Math.abs(f0[q].x - f0[k].x) >= 15; });
+      if (far) keep.push(k);
+    });
+    keep.sort(function (a, b) { return f0[a].x - f0[b].x; });
+    var xticks = keep.map(function (k) {
+      var p = f0[k], mid = ends.indexOf(k) === -1;
+      return '<span class="dd-xtick' + (mid ? ' dd-xt-mid' : '') +
+        '" style="left:' + p.x.toFixed(2) + '%">' + ddDate(p.date) + '</span>';
+    }).join('');
+
+    return '<div class="dd-chart">' +
+      '<div class="dd-chart-lg">' + legend + '</div>' +
+      '<div class="dd-plot"><svg class="dd-svg" viewBox="0 0 100 100" preserveAspectRatio="none">' +
+        grid + lines + '</svg>' + yticks + marks + '</div>' +
+      '<div class="dd-xaxis">' + xticks + '</div>' +
+      '<p class="dd-chart-cap">曲线是窗口内的复权净值，起点＝0%。虚线标的是每只回撤最深的一段：' +
+        '从窗口内高点跌到低点，跌幅就是表里的「最大回撤」——它和首尾的「区间涨跌」不是一回事，' +
+        '跌完又涨回来的那只，涨跌可以是正的、回撤照样很深。' +
+        '点表格里的行可以换基金（最多 ' + DD_PICK_MAX + ' 只）。</p>' +
+      '</div>';
+  }
+
   function renderDD() {
     var el = document.querySelector('#card-dd .card-body');
     if (!el) return;
@@ -1007,17 +1203,34 @@
     });
 
     var worst = rows[0];
+
+    /* 曲线里画了哪几只，表里就标一下：行首一个小圆点，颜色和曲线一致，点行可以切换 */
+    var picked = ddPicked(rows);
+    dd.rows = rows;
+    var pickColor = {};
+    picked.forEach(function (x, i) {
+      pickColor[x.r.code] = DD_CHART_COLORS[i % DD_CHART_COLORS.length];
+    });
+
     var body = rows.map(function (x) {
       var d = x.d, r = x.r;
+      var color = pickColor[r.code];
 
       /* 历史还不够 N 天时算的是「它有的那些天」，跟老基金的数字不可比，标出来 */
       var shortTag = d.enough ? '' :
         '<span class="dd-short" title="这只基金成立还不到 ' + dd.days + ' 天，按它已有的 ' +
         d.days + ' 天算">不足</span>';
 
-      return '<tr' + (d.enough ? '' : ' class="dd-short-row"') + '>' +
+      var trCls = [];
+      if (!d.enough) trCls.push('dd-short-row');
+      if (color) trCls.push('dd-on');
+
+      return '<tr data-code="' + esc(r.code) + '"' +
+        (trCls.length ? ' class="' + trCls.join(' ') + '"' : '') + '>' +
         '<td class="hd-grp-name">' + esc(r.cat) + '</td>' +
-        '<td class="rt-name" title="' + esc(r.name) + '">' + esc(r.name) + shortTag + '</td>' +
+        '<td class="rt-name" title="' + esc(r.name) + '">' +
+          (color ? '<i class="dd-swatch" style="background:' + color + '"></i>' : '') +
+          esc(r.name) + shortTag + '</td>' +
         '<td class="hd-num">' + esc(r.code) +
           (r.own ? '<button class="remove-btn dd-remove" type="button" data-code="' +
             esc(r.code) + '" title="不再看这只">✕</button>' : '') +
@@ -1045,6 +1258,7 @@
     el.innerHTML =
       '<div class="hd-section">最近 ' + dd.days + ' 天 · ' + rows.length + ' 只 · 最深 ' +
         esc(worst.r.name) + ' -' + ddPct(worst.d.mdd) + '</div>' +
+      ddChart(rows) +
       '<div class="table-wrap"><table class="dd-table"><colgroup>' +
         '<col style="width:88px"><col><col style="width:82px"><col style="width:82px">' +
         '<col style="width:78px"><col style="width:116px"><col style="width:76px">' +
@@ -1072,6 +1286,14 @@
         renderDD();
       });
     });
+
+    /* 点一行 = 把这只加进/移出上面的曲线。✕ 是删自选，别让它连带切换 */
+    el.querySelectorAll('.dd-table tbody tr').forEach(function (tr) {
+      tr.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('.dd-remove')) return;
+        ddTogglePick(tr.dataset.code);
+      });
+    });
   }
 
   /* 现拉这几只的复权曲线。returns.json 里已经有的不拉——一次一只基金整包几百 KB */
@@ -1097,6 +1319,7 @@
 
   function ddLoad(el) {
     dd.custom = getDdCustom();
+    dd.pick = getDdPick();
     return Promise.all([
       fetchMd(),
       fetch(RETURNS_URL, { cache: 'no-cache' })
