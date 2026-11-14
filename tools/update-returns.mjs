@@ -162,8 +162,31 @@ for (const r of results) {
   );
 }
 
-/* 推算持仓的对比表：快照 → 推算 */
-const proj = results.filter((r) => payload.funds[r.code].projected);
+/* 回撤一览，顺便核对：同类的复权曲线几乎重合，回撤就该很接近；
+ * 差得远说明代码填错、取到了别人的净值 */
+const DD_DAYS = 90;
+const ddRows = results
+  .map((r) => ({ r, d: NavMath.drawdown(payload.funds[r.code].series, DD_DAYS) }))
+  .filter((x) => x.d)
+  .sort((a, b) => b.d.mdd - a.d.mdd);
+if (ddRows.length) {
+  console.log(`\n区间最大回撤（最近 ${DD_DAYS} 天）`);
+  console.log('代码     最大回撤   区间涨跌   高 → 低              窗口     基金名称');
+  console.log('─'.repeat(110));
+  for (const { r, d } of ddRows) {
+    console.log(
+      r.code + '  ' + (d.mdd * 100).toFixed(2).padStart(8) + '%  ' +
+      pct(d.ret == null ? null : d.ret * 100).padStart(9) + '  ' +
+      (d.peakDate ? d.peakDate + ' → ' + d.troughDate : '          —          ') + '  ' +
+      String(d.days).padStart(3) + ' 天' + (d.enough ? '    ' : ' *') + '  ' + r.name
+    );
+  }
+  if (ddRows.some((x) => !x.d.enough)) {
+    console.log('  * 成立不足 ' + DD_DAYS + ' 天，按已有的天数算，和别的基金不可比');
+  }
+}
+
+/* 推算持仓的对比表：快照 → 推算 */const proj = results.filter((r) => payload.funds[r.code].projected);
 if (proj.length) {
   const money = (v) => (v == null ? '—' : v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   console.log(`\n推算持仓（快照 → ${payload.projection.asOf}，按 A 股交易日推进）`);
@@ -190,6 +213,21 @@ if (proj.length) {
   console.log('\n没有可推算的持仓（表里缺「持有金额」或「持有收益/持仓收益率」）。');
 }
 
-await writeFile(OUTPUT, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+/* 复权曲线点数多，铺开写的话缩进比数据本身还长（约 390 KB vs 150 KB）。
+ * 每只基金的 series 压成一行：体积砍掉一半，看 diff 时也还是「哪只基金的曲线变了」。
+ * 先换成占位串、序列化完再换回来——直接对文本用正则会坏在这条曲线上：series 是
+ * 「数组套数组」，非贪婪匹配会在第一个内层 ] 就截断。 */
+const stash = {};
+Object.keys(payload.funds).forEach((code, i) => {
+  const f = payload.funds[code];
+  if (!f.series || !f.series.length) return;
+  const key = '@@series' + i + '@@';
+  stash[key] = JSON.stringify(f.series);
+  f.series = key;
+});
+let text = JSON.stringify(payload, null, 2);
+Object.keys(stash).forEach((key) => { text = text.split('"' + key + '"').join(stash[key]); });
+
+await writeFile(OUTPUT, text + '\n', 'utf8');
 console.log(`\n✓ 写入 data/returns.json：${results.length} 只，净值截至 ${payload.asOf}` +
   (proj.length ? `；推算持仓 ${proj.length} 只，定投算到 ${payload.projection.asOf}` : ''));

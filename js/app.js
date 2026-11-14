@@ -840,6 +840,233 @@
       renderReturns(m, returns) + renderTable(tbl, m);
   }
 
+  /* ---------- 区间最大回撤 ----------
+   *
+   * 只看最近 N 天：窗口内的最高点 → 之后的低点，最大跌幅。
+   *
+   * 为什么不给「成立以来最大回撤」：那个数对「现在该不该加仓」没有信息量。一只涨了三年的
+   * 基金今天的回撤是 0，可它历史最大回撤有 30%——三年前发生的事和眼下的决定无关。
+   * 也不等于区间涨跌幅：跌完又涨回来，涨跌幅可能接近 0，但中途那一段是真真切切跌过的，
+   * 加仓的人扛的就是那一段。
+   *
+   * 曲线用复权的（NavMath.equityCurve），和上面的「基金区间收益」同一套口径，
+   * 不会出现「收益为正、回撤却很深」的假象（除息日单位净值跳水不是回撤）。
+   *
+   * 换窗口只是在浏览器里换个 N：一只能看 360 天的复权曲线已经在 data/returns.json 里了
+   * （或「同步净值」现算的那份），不用重新拉几 MB 净值。临时想看别的基金，输入代码现拉一只。
+   */
+
+  var DD_WINDOWS = [7, 30, 60, 90, 180, 240, 360];
+  var DD_KEY = 'finance-dd-custom';
+  var DD_DEFAULT_DAYS = 90;
+
+  var dd = {
+    days: DD_DEFAULT_DAYS,
+    scope: 'all',    // 'all' 或某个类别名
+    custom: [],      // 自己加的代码，存在浏览器本地
+    cache: {},       // 现拉的：code → {name, series}
+    failed: {},      // 现拉失败的：code → 原因
+    data: null,      // returns.json，或「同步净值」的结果
+    tbl: null        // 持仓表，用来给每只基金配上类别
+  };
+
+  function getDdCustom() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(DD_KEY));
+      if (Array.isArray(saved)) {
+        return saved.filter(function (c) { return /^\d{6}$/.test(c); });
+      }
+    } catch (e) { /* 忽略损坏数据 */ }
+    return [];
+  }
+
+  function setDdCustom(list) {
+    try { localStorage.setItem(DD_KEY, JSON.stringify(list)); } catch (e) { /* 存不下就算了 */ }
+  }
+
+  /* 待比较的基金 = 持仓表里有代码的行 + 自己加的代码。
+   * 没有复权曲线的（还没跑 update-returns.mjs、或代码取不到净值）先不出现——
+   * 拿一个 0% 顶上去比不出现更误导，谁知道是「没跌过」还是「没数据」 */
+  function ddRows() {
+    var byCode = (dd.data && dd.data.funds) || {};
+    var rows = [], seen = {};
+
+    function add(cat, name, code, series, own) {
+      if (seen[code] || !series || series.length < 2) return;
+      seen[code] = 1;
+      rows.push({ cat: cat, name: name || code, code: code, series: series, own: !!own });
+    }
+
+    if (dd.tbl) {
+      var ci = colIndex(dd.tbl.header);
+      dd.tbl.rows.forEach(function (row) {
+        var code = String(cellOf(row, ci.code)).trim();
+        var f = byCode[code];
+        add(cellOf(row, ci.cat), cellOf(row, ci.name), code, f && f.series, false);
+      });
+    }
+
+    dd.custom.forEach(function (code) {
+      var c = dd.cache[code], f = byCode[code];
+      add('自选', (c && c.name) || (f && f.name), code,
+        c ? c.series : (f && f.series), true);
+    });
+
+    return rows;
+  }
+
+  function ddPct(v) { return (v * 100).toFixed(2) + '%'; }
+
+  /* 只留月-日：这一列是给人看「哪一段跌的」，年份在这没信息量 */
+  function ddDate(d) { return d ? d.slice(5) : '—'; }
+
+  function ddFailedNote() {
+    var codes = Object.keys(dd.failed);
+    if (!codes.length) return '';
+    return '<p class="hd-note">这些代码没取到净值：' +
+      codes.map(function (c) {
+        return '<code>' + esc(c) + '</code>（' + esc(dd.failed[c]) + '）';
+      }).join('、') + '</p>';
+  }
+
+  /* 「范围」下拉的选项跟着有数据的类别走，不写死：持仓表里加了新类别，这里自动就多一项 */
+  function paintDdScope(rows) {
+    var sel = document.getElementById('dd-scope');
+    if (!sel) return;
+
+    var cats = [];
+    rows.forEach(function (r) { if (cats.indexOf(r.cat) === -1) cats.push(r.cat); });
+    if (dd.scope !== 'all' && cats.indexOf(dd.scope) === -1) dd.scope = 'all';
+
+    sel.innerHTML = '<option value="all">全部</option>' + cats.map(function (c) {
+      return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+    }).join('');
+    sel.value = dd.scope;
+  }
+
+  function renderDD() {
+    var el = document.querySelector('#card-dd .card-body');
+    if (!el) return;
+
+    var all = ddRows();
+    paintDdScope(all);
+
+    var rows = all
+      .filter(function (r) { return dd.scope === 'all' || r.cat === dd.scope; })
+      .map(function (r) { return { r: r, d: NavMath.drawdown(r.series, dd.days) }; })
+      .filter(function (x) { return x.d; });
+
+    if (!rows.length) {
+      el.innerHTML = '<p class="hint">还没有可比较的净值数据。持仓里的基金要有 ' +
+        '<code>data/returns.json</code> 里的复权曲线（跑一次 <code>node tools/update-returns.mjs</code>），' +
+        '也可以在上面直接输代码临时拉。</p>' + ddFailedNote();
+      el.dataset.state = 'ok';
+      return;
+    }
+
+    /* 回撤深的排前面：这块就是用来找「谁在这个窗口里最难受」的 */
+    rows.sort(function (a, b) {
+      if (b.d.mdd !== a.d.mdd) return b.d.mdd - a.d.mdd;
+      return a.r.code < b.r.code ? -1 : 1;
+    });
+
+    var worst = rows[0];
+    var body = rows.map(function (x) {
+      var d = x.d, r = x.r;
+
+      /* 历史还不够 N 天时算的是「它有的那些天」，跟老基金的数字不可比，标出来 */
+      var shortTag = d.enough ? '' :
+        '<span class="dd-short" title="这只基金成立还不到 ' + dd.days + ' 天，按它已有的 ' +
+        d.days + ' 天算">不足</span>';
+
+      return '<tr' + (d.enough ? '' : ' class="dd-short-row"') + '>' +
+        '<td class="hd-grp-name">' + esc(r.cat) + '</td>' +
+        '<td class="rt-name" title="' + esc(r.name) + '">' + esc(r.name) + shortTag + '</td>' +
+        '<td class="hd-num">' + esc(r.code) +
+          (r.own ? '<button class="remove-btn dd-remove" type="button" data-code="' +
+            esc(r.code) + '" title="不再看这只">✕</button>' : '') +
+        '</td>' +
+        '<td class="hd-num dd-mdd' + (d.mdd > 0 ? '' : ' dd-zero') + '">' + ddPct(d.mdd) + '</td>' +
+        '<td class="hd-num ' + clsOf(d.ret) + '">' + (d.ret == null ? '—' : fmtRate(d.ret)) + '</td>' +
+        '<td class="hd-num">' + (d.peakDate
+          ? '<span title="' + esc(d.peakDate + ' 高点 → ' + d.troughDate + ' 低点') + '">' +
+            ddDate(d.peakDate) + ' → ' + ddDate(d.troughDate) + '</span>'
+          : '—') + '</td>' +
+        '<td class="hd-num ' + (d.curDD > 0 ? 'down' : 'flat') + '">' + ddPct(d.curDD) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    var head = '<tr><th>类别</th><th>基金名称</th><th class="hd-num">代码</th>' +
+      '<th class="hd-num">最大回撤</th><th class="hd-num">区间涨跌</th>' +
+      '<th class="hd-num">高 → 低</th><th class="hd-num">距峰值</th></tr>';
+
+    el.innerHTML =
+      '<div class="hd-section">最近 ' + dd.days + ' 天 · ' + rows.length + ' 只 · 最深 ' +
+        esc(worst.r.name) + ' ' + ddPct(worst.d.mdd) + '</div>' +
+      '<div class="table-wrap"><table class="dd-table"><colgroup>' +
+        '<col style="width:86px"><col><col style="width:88px"><col style="width:88px">' +
+        '<col style="width:84px"><col style="width:124px"><col style="width:84px">' +
+        '</colgroup>' +
+        '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
+      '<p class="hd-note">只看窗口内：<b>峰只取窗口里的点</b>，谷是峰之后的低点。' +
+        '拿窗口之前的最高点来算，得出的其实是「从以前某个高点跌到今天跌了多少」，' +
+        '窗口里明明在涨也会被标成深回撤。' +
+        '回撤按<b>复权净值</b>算（含分红再投），和上面的区间收益同一套口径；' +
+        '「区间涨跌」是窗口首尾的涨跌幅，跌完又涨回来时它会接近 0，而回撤照样很深；' +
+        '「距峰值」是现在的净值距窗口内最高点还有多少，接近 0 说明还在高位。' +
+        '带「不足」的是成立还不到 ' + dd.days + ' 天的基金，窗口没铺满，别直接和老基金比。' +
+        '净值截至 ' + esc((dd.data && dd.data.asOf) || '—') + '，QDII 普遍比 A 股晚一天。</p>' +
+      ddFailedNote();
+
+    el.dataset.state = 'ok';
+
+    el.querySelectorAll('.dd-remove').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        dd.custom = dd.custom.filter(function (c) { return c !== btn.dataset.code; });
+        setDdCustom(dd.custom);
+        delete dd.cache[btn.dataset.code];
+        renderDD();
+      });
+    });
+  }
+
+  /* 现拉这几只的复权曲线。returns.json 里已经有的不拉——一次一只基金整包几百 KB */
+  function ddFetchSeries(codes, el) {
+    var byCode = (dd.data && dd.data.funds) || {};
+    var todo = codes.filter(function (c) {
+      if (dd.cache[c]) return false;
+      var f = byCode[c];
+      return !(f && f.series && f.series.length > 1);
+    });
+    if (!todo.length) return Promise.resolve();
+
+    if (el) el.dataset.state = 'loading';
+    return loadTrends(todo).then(function (res) {
+      todo.forEach(function (code) { delete dd.failed[code]; });
+      Object.keys(res.trends).forEach(function (code) {
+        var t = res.trends[code];
+        dd.cache[code] = { name: t.name, series: NavMath.equityCurve(t.trend, NavMath.SERIES_DAYS) };
+      });
+      res.failed.forEach(function (f) { dd.failed[f.code] = f.msg; });
+    });
+  }
+
+  function ddLoad(el) {
+    dd.custom = getDdCustom();
+    return Promise.all([
+      fetchMd(),
+      fetch(RETURNS_URL, { cache: 'no-cache' })
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .catch(function () { return null; })
+    ]).then(function (res) {
+      dd.tbl = pickHoldingsTable(res[0]);
+      /* 点过「同步净值」的话那份比仓库里的新，而且同样带复权曲线 */
+      dd.data = holdings.derived || res[1];
+      renderDD();
+      return ddFetchSeries(dd.custom, el).then(renderDD);
+    });
+  }
+
   /* ---------- 卡片状态机 ---------- */
 
   var loaders = {};
@@ -1020,7 +1247,9 @@
    * 结果存 localStorage，之后打开页面直接用缓存。
    */
 
-  var SYNC_KEY = 'finance-nav-sync';
+  /* v2：v1 缓存里的 payload 没有复权曲线（series），留着会让「区间最大回撤」整块空掉。
+   * 换个键等于让老缓存自然作废，比在里面加版本判断简单。 */
+  var SYNC_KEY = 'finance-nav-sync-v2';
   /* 一次拉几只。二十多只并发全开会把连接占满，太贪反而慢 */
   var SYNC_CONCURRENCY = 4;
   var NAV_RETRIES = 2;
@@ -1189,6 +1418,10 @@
 
       paintHoldings();
 
+      /* 同步结果里也带复权曲线（buildPayload 一起算的），回撤那块跟着换数据重画 */
+      dd.data = payload;
+      if (dd.tbl) renderDD();
+
       if (res.failed.length) {
         setSyncStatus('同步完成，但 ' + res.failed.length + ' 只没取到：' +
           res.failed.map(function (f) { return f.code; }).join('、'), 'bad');
@@ -1212,7 +1445,10 @@
     LIVE_CARDS.forEach(function (id) {
       loadCard(document.getElementById(id));
     });
-    if (includeHoldings) loadCard(document.getElementById('card-holdings'));
+    if (includeHoldings) {
+      loadCard(document.getElementById('card-holdings'));
+      loadCard(document.getElementById('card-dd'));
+    }
     document.getElementById('update-time').textContent =
       '数据更新于 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false });
   }
@@ -1234,6 +1470,47 @@
     }
     input.value = '';
   });
+
+  /* 区间最大回撤：换窗口 / 换范围只是重算，不用发请求（曲线早就在手里了） */
+  (function () {
+    loaders['card-dd'] = ddLoad;
+
+    var win = document.getElementById('dd-window');
+    if (win) {
+      win.addEventListener('change', function () {
+        dd.days = DD_WINDOWS.indexOf(+win.value) === -1 ? DD_DEFAULT_DAYS : +win.value;
+        renderDD();
+      });
+    }
+    var scope = document.getElementById('dd-scope');
+    if (scope) {
+      scope.addEventListener('change', function () {
+        dd.scope = scope.value || 'all';
+        renderDD();
+      });
+    }
+    var form = document.getElementById('dd-form');
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var input = document.getElementById('dd-input');
+        var code = input.value.trim();
+        input.value = '';
+        if (!/^\d{6}$/.test(code)) return;
+
+        if (dd.custom.indexOf(code) === -1) {
+          dd.custom.push(code);
+          setDdCustom(dd.custom);
+        }
+        /* 卡片还没加载过（比如有人刷新时它失败了）就整张重来，别在半空里拼 */
+        if (!dd.tbl) { loadCard(document.getElementById('card-dd')); return; }
+
+        renderDD();   // 新代码还没数据就不出现，先把已有的画出来
+        ddFetchSeries(dd.custom, document.querySelector('#card-dd .card-body'))
+          .then(renderDD, renderDD);
+      });
+    }
+  })();
 
   refreshAll(true);
   setInterval(function () { refreshAll(false); }, 60 * 1000);

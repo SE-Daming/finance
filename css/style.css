@@ -346,7 +346,7 @@ body {
 .table-wrap { overflow-x: auto; margin: 0 -4px; }
 
 /* ---- 表头吸顶 ----
- * 三张长表（持仓明细 / 基金区间收益 / 申购限额）滚到下面时，表头跟着走。
+ * 几张长表（持仓明细 / 基金区间收益 / 申购限额 / 区间最大回撤）滚到下面时，表头跟着走。
  *
  * 这里的坑：position: sticky 只对「最近的滚动容器」生效。.table-wrap 为了窄屏横向滚动
  * 设了 overflow-x: auto，而 CSS 规定一个轴不是 visible 时另一个轴会跟着变成 auto——
@@ -473,6 +473,69 @@ body {
 .returns-table .hd-num { text-align: right; font-variant-numeric: tabular-nums; }
 .returns-table td:first-child { font-weight: 600; }
 .returns-table tbody tr:hover { background: var(--card-soft); }
+
+/* ---- 持仓：区间最大回撤 ---- */
+.dd-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.dd-field select {
+  background: var(--card-soft);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color .15s;
+}
+.dd-field select:focus { border-color: var(--accent); }
+
+.dd-table {
+  width: 100%;
+  min-width: 760px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.dd-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .5px;
+  color: var(--text-dim);
+  background: var(--card-soft);
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--card-border);
+  white-space: nowrap;
+}
+.dd-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #eef1f7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dd-table .hd-num { text-align: right; font-variant-numeric: tabular-nums; }
+.dd-table td:first-child { font-weight: 600; }
+.dd-table tbody tr:hover { background: var(--card-soft); }
+
+/* 回撤是「亏了多少」，按这套配色就是绿；加粗因为它是这块的主角 */
+.dd-table .dd-mdd { color: var(--down); font-weight: 700; }
+.dd-table .dd-mdd.dd-zero { color: var(--flat); font-weight: 400; }
+
+/* 历史还不够 N 天：窗口没铺满，跟老基金的数字不可比，标出来别让人直接横向比 */
+.dd-table tr.dd-short-row td { background: rgba(184, 121, 46, .05); }
+.dd-short {
+  color: #b8792e;
+  font-size: 11px;
+  margin-left: 4px;
+}
+.dd-remove { padding: 0 4px; font-size: 12px; }
 
 /* ---- 持仓：申购限额 ---- */
 /* 存在的意义是把「买不进」摆到脸上，所以有问题的行给底色，正常的行保持安静 */

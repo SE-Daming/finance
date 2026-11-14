@@ -27,6 +27,10 @@
   var PROJ_NOTE = '推算按 A 股交易日推进：当天净值还没公布的，用最近的已知净值当买入价估算，' +
     '净值出来后自动纠正。';
 
+  /* 复权曲线一次存多少天的点。看板最多让人看 360 天，留点余量：
+   * 窗口起点那天本身也得有净值，不然「最近 360 天」实际就只剩 359 天。 */
+  var SERIES_DAYS = 370;
+
   var round2 = function (v) { return Math.round(v * 100) / 100; };
 
   /* 时间戳是北京时间当天零点，直接用 toISOString 会倒回前一天，所以先补 8 小时 */
@@ -101,6 +105,76 @@
   function shiftDays(dateStr, days) {
     var p = dateStr.split('-').map(Number);
     return new Date(Date.UTC(p[0], p[1] - 1, p[2] - days)).toISOString().slice(0, 10);
+  }
+
+  /* ---------- 区间最大回撤 ----------
+   *
+   * 复权净值曲线：把官方日涨跌幅逐日复利成一条曲线，只留最后 keepDays 个自然日的点。
+   *
+   * 为什么不直接画 nav（单位净值）：分红除息那天单位净值会跳水，曲线上凭空多出一段回撤。
+   * eq 已经含分红再投，和「区间收益」是同一套口径，回撤也得跟它一致，否则同一只基金
+   * 上面写着涨、下面标着巨幅回撤，自己跟自己打架。
+   * 曲线绝对值没有意义（起点是这只基金的第一天），只有比值有意义，所以起点固定 100。
+   */
+  function equityCurve(trend, keepDays) {
+    if (!trend || !trend.length) return [];
+    var from = keepDays > 0 ? shiftDays(trend[trend.length - 1].date, keepDays) : trend[0].date;
+    var idx = 100, out = [];
+    for (var i = 0; i < trend.length; i++) {
+      var t = trend[i];
+      idx = idx * (1 + (t.eq || 0) / 100);
+      if (t.date >= from) out.push([t.date, round2(idx)]);
+    }
+    return out;
+  }
+
+  /* 区间最大回撤：只看最近 nDays 个自然日，窗口内逐点算
+   *   dd = (窗口内此前最高 − 当日) ÷ 窗口内此前最高，取最大
+   *
+   * 峰值只认**窗口内**的点。拿窗口之前的最高点来算，得出的其实是「从以前某个高点跌到今天
+   * 跌了多少」，不是这 N 天里的回撤——窗口里明明在涨，也会被标成深回撤。
+   *
+   * 返回（全部是比率，不是百分数）：
+   *   mdd        窗口内最大回撤
+   *   peakDate/troughDate  那一段的高点和低点。mdd=0（只涨没跌）时都是 null
+   *   ret        窗口首尾涨跌幅。和 mdd 是两回事：跌完又涨回来，ret 可能是 0 而 mdd 很深
+   *   curDD      当前值距窗口内最高点还有多少
+   *   from/to    窗口实际的首尾日期；days 是它覆盖的自然日数
+   *   enough     false 表示这只基金历史还不够 nDays 天（新基金），算的是它有的那些天 */
+  function drawdown(series, nDays) {
+    if (!series || series.length < 2) return null;
+
+    var endDate = series[series.length - 1][0];
+    var want = shiftDays(endDate, nDays);          // shiftDays 是往前推，参数正数
+    var win = [];
+    for (var i = 0; i < series.length; i++) {
+      if (series[i][0] >= want) win.push(series[i]);
+    }
+    if (win.length < 2) return null;
+
+    var peak = win[0][1], peakDate = win[0][0];
+    var mdd = 0, mPeak = null, mTrough = null;
+    for (var j = 1; j < win.length; j++) {
+      var d = win[j][0], v = win[j][1];
+      if (v > peak) { peak = v; peakDate = d; }
+      if (peak > 0) {
+        var dd = (peak - v) / peak;
+        if (dd > mdd) { mdd = dd; mPeak = peakDate; mTrough = d; }
+      }
+    }
+
+    var first = win[0][1], last = win[win.length - 1][1];
+    return {
+      mdd: mdd,
+      peakDate: mPeak,
+      troughDate: mTrough,
+      ret: first > 0 ? last / first - 1 : null,
+      curDD: peak > 0 ? (peak - last) / peak : 0,
+      from: win[0][0],
+      to: endDate,
+      days: Math.round((Date.parse(endDate) - Date.parse(win[0][0])) / 86400000) + 1,
+      enough: series[0][0] <= want
+    };
   }
 
   /* 各区间收益。最新净值日不一定是今天（QDII 晚一天、节假日顺延），所以一起返回 */
@@ -236,6 +310,7 @@
         r1d: r.r1d, r1w: r.r1w, r1m: r.r1m,
         r3m: r.r3m, r6m: r.r6m, r1y: r.r1y,
         start: r.start,               // 各区间实际起点日期，见 computeReturns
+        series: equityCurve(e.trend, SERIES_DAYS),   // 复权曲线，见 equityCurve
         projected: p || null          // 没有就是 null，别省掉这个键：前端按形状取值
       };
       if (r.navDate) navDates.push(r.navDate);
@@ -263,6 +338,7 @@
     WINDOWS: WINDOWS,
     NOTE: NOTE,
     PROJ_NOTE: PROJ_NOTE,
+    SERIES_DAYS: SERIES_DAYS,
     toDate: toDate,
     round2: round2,
     normalizeTrend: normalizeTrend,
@@ -271,6 +347,8 @@
     lastIndexUpTo: lastIndexUpTo,
     shiftMonths: shiftMonths,
     shiftDays: shiftDays,
+    equityCurve: equityCurve,
+    drawdown: drawdown,
     computeReturns: computeReturns,
     project: project,
     buildPayload: buildPayload
