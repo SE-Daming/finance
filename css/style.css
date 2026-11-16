@@ -346,7 +346,7 @@ body {
 .table-wrap { overflow-x: auto; margin: 0 -4px; }
 
 /* ---- 表头吸顶 ----
- * 几张长表（持仓明细 / 基金区间收益 / 申购限额 / 区间最大回撤）滚到下面时，表头跟着走。
+ * 几张长表（持仓明细 / 基金区间收益 / 申购限额 / 区间最大跌幅与涨幅）滚到下面时，表头跟着走。
  *
  * 这里的坑：position: sticky 只对「最近的滚动容器」生效。.table-wrap 为了窄屏横向滚动
  * 设了 overflow-x: auto，而 CSS 规定一个轴不是 visible 时另一个轴会跟着变成 auto——
@@ -497,7 +497,9 @@ body {
 
 .dd-table {
   width: 100%;
-  min-width: 840px;
+  /* 11 列的量：宽屏下卡片内宽约 1050px，这里留 940 是给窄屏横向滚动的下限，
+   * 再窄「基金名称」就只剩两个字了，不如让它滚 */
+  min-width: 940px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;
@@ -524,9 +526,16 @@ body {
 .dd-table td:first-child { font-weight: 600; }
 .dd-table tbody tr:hover { background: var(--card-soft); }
 
-/* 回撤是「亏了多少」，按这套配色就是绿；加粗因为它是这块的主角 */
+/* 回撤是「亏了多少」，按这套配色就是绿；涨幅是「涨了多少」，红。
+ * 两个都加粗：它们是这块的主角，一眼要能扫到两个极端。 */
 .dd-table .dd-mdd { color: var(--down); font-weight: 700; }
 .dd-table .dd-mdd.dd-zero { color: var(--flat); font-weight: 400; }
+.dd-table .dd-mru { color: var(--up); font-weight: 700; }
+.dd-table .dd-mru.dd-zero { color: var(--flat); font-weight: 400; }
+
+/* 「区间涨幅 / 区间跌幅」按方向只会有一个有值，另一边是个浅灰破折号——
+ * 不能让它看起来像「0%」，也不能让它抢眼到像是有数 */
+.dd-table .dd-dash { color: #c8d0dd; }
 
 /* 历史还不够 N 天：窗口没铺满，跟老基金的数字不可比，标出来别让人直接横向比 */
 .dd-table tr.dd-short-row td { background: rgba(184, 121, 46, .05); }
@@ -537,8 +546,9 @@ body {
 }
 .dd-remove { padding: 0 4px; font-size: 12px; }
 
-/* ---- 持仓：回撤曲线的图 ---- */
-/* 表格给数字，图给形状：曲线从窗口起点归零，竖虚线是「高点 → 低点」那一段跌幅。
+/* ---- 持仓：涨跌曲线的图 ---- */
+/* 表格给数字，图给形状：曲线从窗口起点归零，竖虚线是「高点 → 低点」那一段跌幅，
+ * 竖点线是「低点 → 高点」那一段涨幅。
  * 结构上有意把坐标轴文字放在 SVG 外面——SVG 用 preserveAspectRatio="none" 拉伸铺满，
  * 里面的文字会跟着变形。 */
 .dd-chart { margin: 2px 0 16px; }
@@ -553,6 +563,7 @@ body {
 .dd-chart-lg span { display: inline-flex; align-items: center; gap: 6px; }
 .dd-chart-lg i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .dd-chart-lg b { color: var(--down); font-variant-numeric: tabular-nums; }
+.dd-chart-lg b.dd-lg-up { color: var(--up); }
 .dd-chart-lg em { font-style: normal; }
 
 .dd-plot {
@@ -588,6 +599,9 @@ body {
 }
 .dd-dot.dd-trough { background: currentColor; }
 .dd-drop { position: absolute; width: 0; border-left: 1px dashed; opacity: .5; }
+/* 涨的那一段用点线、更淡：它和跌段常常共用同一个端点（低点就是上一个谷底，
+ * 高点就是下一个峰），画成一样粗的两条虚线，图就成了一片竖线栅栏 */
+.dd-rise { position: absolute; width: 0; border-left: 1px dotted; opacity: .38; }
 .dd-mtag {
   position: absolute;
   transform: translateY(-50%);
@@ -596,6 +610,7 @@ body {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.dd-mtag-up { font-weight: 600; opacity: .85; }
 
 .dd-xaxis { position: relative; height: 15px; margin: 6px 0 0 46px; }
 .dd-xtick {

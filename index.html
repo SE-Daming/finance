@@ -8,7 +8,7 @@
   <!-- 资源后面挂 ?v=：GitHub Pages 的静态文件缓存 10 分钟，改了 CSS 却没改文件名时，
        新 HTML 配上旧 CSS 会把页面搞坏（回撤曲线就因此被画成黑块）。改动 CSS / JS 后
        重新部署时把这里的版本号一起改掉，新 HTML 就会去取新的文件。 -->
-  <link rel="stylesheet" href="css/style.css?v=2026-11-14a">
+  <link rel="stylesheet" href="css/style.css?v=2026-11-16a">
 </head>
 <body>
   <header class="topbar">
@@ -34,7 +34,7 @@
 
     <section class="card card-full" id="card-dd">
       <div class="card-head">
-        <h2>区间最大回撤</h2>
+        <h2>区间最大跌幅 / 涨幅</h2>
         <div class="hd-tools">
           <label class="dd-field">窗口
             <select id="dd-window">
@@ -57,7 +57,7 @@
                placeholder="再加一只：输入 6 位基金代码，如 161725" autocomplete="off">
         <button type="submit">添加</button>
       </form>
-      <p class="hint">只看最近 N 天里从高点到后续低点的最大跌幅，不是成立以来最大回撤。默认列出持仓里的全部基金，自己加的代码存在浏览器本地（localStorage）。</p>
+      <p class="hint">只看最近 N 天里：高点到后续低点的最大跌幅（回撤），和低点到后续高点的最大涨幅——不是成立以来的最大回撤。默认列出持仓里的全部基金，自己加的代码存在浏览器本地（localStorage）。</p>
       <div class="card-body" data-state="loading"><span class="spinner"></span></div>
     </section>
 
@@ -95,8 +95,8 @@
     <p>数据来源：腾讯财经公开行情接口，仅供个人参考，不构成投资建议。</p>
   </footer>
 
-  <script src="js/nav-math.js?v=2026-11-14a"></script>
-  <script src="js/limit-check.js?v=2026-11-14a"></script>
-  <script src="js/app.js?v=2026-11-14a"></script>
+  <script src="js/nav-math.js?v=2026-11-16a"></script>
+  <script src="js/limit-check.js?v=2026-11-16a"></script>
+  <script src="js/app.js?v=2026-11-16a"></script>
 </body>
 </html>

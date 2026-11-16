@@ -133,16 +133,23 @@
     return out;
   }
 
-  /* 区间最大回撤：只看最近 nDays 个自然日，窗口内逐点算
+  /* 区间最大回撤 / 最大涨幅：只看最近 nDays 个自然日，窗口内逐点算
    *   dd = (窗口内此前最高 − 当日) ÷ 窗口内此前最高，取最大
+   *   ru = (当日 − 窗口内此前最低) ÷ 窗口内此前最低，取最大
    *
    * 峰值只认**窗口内**的点。拿窗口之前的最高点来算，得出的其实是「从以前某个高点跌到今天
-   * 跌了多少」，不是这 N 天里的回撤——窗口里明明在涨，也会被标成深回撤。
+   * 跌了多少」，不是这 N 天里的回撤——窗口里明明在涨，也会被标成深回撤。涨幅同理。
+   *
+   * 涨幅是回撤的镜像，但不是把回撤取反：一边先高后低，一边先低后高，找的是两段不同的行情。
+   * 只用「首尾涨跌」也代替不了它们——净涨 2% 的窗口里可能先跌 15% 再涨 17%，那 15% 和 17%
+   * 才是持有人真正扛过的和错过的。
    *
    * 返回（全部是比率，不是百分数）：
    *   mdd        窗口内最大回撤
    *   peakDate/troughDate  那一段的高点和低点。mdd=0（只涨没跌）时都是 null
-   *   ret        窗口首尾涨跌幅。和 mdd 是两回事：跌完又涨回来，ret 可能是 0 而 mdd 很深
+   *   mru        窗口内最大涨幅（先低后高）。mru=0（只跌没涨）时是 0
+   *   runLowDate/runHighDate  那一段的低点和高点
+   *   ret        窗口首尾涨跌幅。和 mdd/mru 都是两回事：跌完又涨回来，ret 可能是 0 而 mdd 很深
    *   curDD      当前值距窗口内最高点还有多少
    *   from/to    窗口实际的首尾日期；days 是它覆盖的自然日数
    *   enough     false 表示这只基金历史还不够 nDays 天（新基金），算的是它有的那些天 */
@@ -159,8 +166,18 @@
 
     var peak = win[0][1], peakDate = win[0][0];
     var mdd = 0, mPeak = null, mTrough = null;
+    var low = win[0][1], lowDate = win[0][0];
+    var mru = 0, mLow = null, mHigh = null;
     for (var j = 1; j < win.length; j++) {
       var d = win[j][0], v = win[j][1];
+
+      /* 涨幅先算、再更新低点：这样「低点」一定早于「高点」，不会拿同一天跟自己比出 0% */
+      if (low > 0) {
+        var ru = v / low - 1;
+        if (ru > mru) { mru = ru; mLow = lowDate; mHigh = d; }
+      }
+      if (v < low) { low = v; lowDate = d; }
+
       if (v > peak) { peak = v; peakDate = d; }
       if (peak > 0) {
         var dd = (peak - v) / peak;
@@ -173,6 +190,9 @@
       mdd: mdd,
       peakDate: mPeak,
       troughDate: mTrough,
+      mru: mru,
+      runLowDate: mLow,
+      runHighDate: mHigh,
       ret: first > 0 ? last / first - 1 : null,
       curDD: peak > 0 ? (peak - last) / peak : 0,
       from: win[0][0],

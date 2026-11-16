@@ -840,14 +840,16 @@
       renderReturns(m, returns) + renderTable(tbl, m);
   }
 
-  /* ---------- 区间最大回撤 ----------
+  /* ---------- 区间最大跌幅 / 涨幅 ----------
    *
-   * 只看最近 N 天：窗口内的最高点 → 之后的低点，最大跌幅。
+   * 只看最近 N 天：窗口内的最高点 → 之后的低点，最大跌幅（回撤）；
+   * 反过来，窗口内的最低点 → 之后的高点，最大涨幅。
    *
    * 为什么不给「成立以来最大回撤」：那个数对「现在该不该加仓」没有信息量。一只涨了三年的
    * 基金今天的回撤是 0，可它历史最大回撤有 30%——三年前发生的事和眼下的决定无关。
    * 也不等于区间涨跌幅：跌完又涨回来，涨跌幅可能接近 0，但中途那一段是真真切切跌过的，
-   * 加仓的人扛的就是那一段。
+   * 加仓的人扛的就是那一段。涨幅同理：只写「区间涨 +2%」会把「先跌 15% 再涨 17%」那种
+   * 一路上都在纠结的行情说成岁月静好。
    *
    * 曲线用复权的（NavMath.equityCurve），和上面的「基金区间收益」同一套口径，
    * 不会出现「收益为正、回撤却很深」的假象（除息日单位净值跳水不是回撤）。
@@ -918,6 +920,20 @@
   }
 
   function ddPct(v) { return (v * 100).toFixed(2) + '%'; }
+
+  /* 「区间涨跌」拆成正负两列：净涨只填涨幅、净跌只填跌幅，另一边留空。
+   * 三个数说的是同一件事——涨跌是带符号的净额，拆开是为了扫一眼看出方向，不用先解那个减号。
+   * 不拆成「上涨日累计 / 下跌日累计」：那个数跟净涨跌不是加法关系（复利），
+   * 并排放着会让人以为加起来对不上是算错了。
+   *
+   * 四舍五入到 0 的那点零头（不到 0.005%）落在涨幅格显示 0.00%，免得写出「-0.00%」这种怪东西。 */
+  function ddUpDown(ret) {
+    if (ret == null) return { up: null, dn: null };
+    var pct = Math.round(ret * 10000) / 100;
+    if (pct > 0) return { up: ret, dn: null };
+    if (pct < 0) return { up: null, dn: -ret };
+    return { up: 0, dn: null };
+  }
 
   /* 只留月-日：这一列是给人看「哪一段跌的」，年份在这没信息量 */
   function ddDate(d) { return d ? d.slice(5) : '—'; }
@@ -1145,8 +1161,27 @@
           ddPct(d.mdd) + '</span>';
       }
 
+      /* 低点到高点那一段：点线 + 涨幅标注，和上面那条虚线正好互为镜像。
+       * 只画线不画点——高点常常和跌段的起点是同一天，两个点叠在一起谁也看不清。
+       * 标注压在高点「上方」：跌段那条压在下方的谷底，两条分开就不打架了。 */
+      var lp = at(ln, d.runLowDate), hp = at(ln, d.runHighDate);
+      if (lp && hp && d.mru > 0) {
+        marks += '<i class="dd-rise" style="left:' + hp.x.toFixed(2) + '%;top:' +
+          yf(hp.v).toFixed(2) + '%;height:' + (yf(lp.v) - yf(hp.v)).toFixed(2) +
+          '%;border-left-color:' + ln.color + '"></i>';
+
+        var shiftUp = hp.x < 6 ? 'translate(-6px,-15px)'
+          : hp.x > 94 ? 'translate(calc(-100% + 6px),-15px)'
+          : 'translate(-50%,-15px)';
+        marks += '<span class="dd-mtag dd-mtag-up" style="left:' + hp.x.toFixed(2) + '%;top:' +
+          yf(hp.v).toFixed(2) + '%;color:' + ln.color + ';transform:' + shiftUp + '">+' +
+          ddPct(d.mru) + '</span>';
+      }
+
+      /* 图例用「跌 / 涨」两个汉字代替正负号：两个数并排时，光靠 +/- 和颜色分不清哪个是哪个 */
       legend += '<span><i style="background:' + ln.color + '"></i>' + esc(ln.row.r.name) +
-        ' <b>-' + ddPct(d.mdd) + '</b>' +
+        ' <b>跌 ' + ddPct(d.mdd) + '</b>' +
+        ' <b class="dd-lg-up">涨 ' + ddPct(d.mru) + '</b>' +
         ' <em>区间 ' + (d.ret == null ? '—' : fmtRate(d.ret)) + '</em></span>';
     });
 
@@ -1173,9 +1208,10 @@
         ' width="100%" height="230">' +
         grid + lines + '</svg>' + yticks + marks + '</div>' +
       '<div class="dd-xaxis">' + xticks + '</div>' +
-      '<p class="dd-chart-cap">曲线是窗口内的复权净值，起点＝0%。虚线标的是每只回撤最深的一段：' +
-        '从窗口内高点跌到低点，跌幅就是表里的「最大回撤」——它和首尾的「区间涨跌」不是一回事，' +
-        '跌完又涨回来的那只，涨跌可以是正的、回撤照样很深。' +
+      '<p class="dd-chart-cap">曲线是窗口内的复权净值，起点＝0%。<b>竖虚线</b>标的是每只跌得最猛的一段：' +
+        '从窗口内高点跌到低点，跌幅就是表里的「最大跌幅」；<b>竖点线</b>是反过来那段——先低后高，' +
+        '涨了多少就是「最大涨幅」。两条都和首尾的「区间涨跌」不是一回事：跌完又涨回来的那只，' +
+        '涨跌可以是正的，中间那两段照样又深又长。' +
         '点表格里的行可以换基金（最多 ' + DD_PICK_MAX + ' 只）。</p>' +
       '</div>';
   }
@@ -1200,13 +1236,17 @@
       return;
     }
 
-    /* 回撤深的排前面：这块就是用来找「谁在这个窗口里最难受」的 */
+    /* 跌得深的排前面：这块首先是用来找「谁在这个窗口里最难受」的。
+     * 跌幅打平时再比涨幅——同一条跌幅下涨得多，说明它更折腾 */
     rows.sort(function (a, b) {
       if (b.d.mdd !== a.d.mdd) return b.d.mdd - a.d.mdd;
+      if (b.d.mru !== a.d.mru) return b.d.mru - a.d.mru;
       return a.r.code < b.r.code ? -1 : 1;
     });
 
     var worst = rows[0];
+    var best = null;
+    rows.forEach(function (x) { if (!best || x.d.mru > best.d.mru) best = x; });
 
     /* 曲线里画了哪几只，表里就标一下：行首一个小圆点，颜色和曲线一致，点行可以切换 */
     var picked = ddPicked(rows);
@@ -1219,6 +1259,7 @@
     var body = rows.map(function (x) {
       var d = x.d, r = x.r;
       var color = pickColor[r.code];
+      var split = ddUpDown(d.ret);
 
       /* 历史还不够 N 天时算的是「它有的那些天」，跟老基金的数字不可比，标出来 */
       var shortTag = d.enough ? '' :
@@ -1241,10 +1282,24 @@
         '</td>' +
         '<td class="hd-num dd-mdd' + (d.mdd > 0 ? '' : ' dd-zero') + '">' +
           (d.mdd > 0 ? '-' : '') + ddPct(d.mdd) + '</td>' +
-        '<td class="hd-num ' + clsOf(d.ret) + '">' + (d.ret == null ? '—' : fmtRate(d.ret)) + '</td>' +
+        '<td class="hd-num dd-mru' + (d.mru > 0 ? '' : ' dd-zero') + '">' +
+          (d.mru > 0 ? '+' : '') + ddPct(d.mru) + '</td>' +
+        /* 涨跌拆两列，净额不再单占一列：净涨只填左边、净跌只填右边，另一边是条浅灰破折号。
+         * 带符号的净涨跌挂在两格的 title 上，鼠标一悬停就有；单摆一列要 90px，
+         * 而这 90px 得从「基金名称」里抠，名字就只剩七八个字了。 */
+        '<td class="hd-num ' + (split.up == null ? 'dd-dash' : clsOf(split.up)) + '"' +
+          (d.ret == null ? '' : ' title="窗口净涨跌 ' + esc(fmtRate(d.ret)) + '"') + '>' +
+          (split.up == null ? '—' : fmtRate(split.up)) + '</td>' +
+        '<td class="hd-num ' + (split.dn == null ? 'dd-dash' : 'down') + '"' +
+          (d.ret == null ? '' : ' title="窗口净涨跌 ' + esc(fmtRate(d.ret)) + '"') + '>' +
+          (split.dn == null ? '—' : '-' + ddPct(split.dn)) + '</td>' +
         '<td class="hd-num">' + (d.peakDate
           ? '<span title="' + esc(d.peakDate + ' 高点 → ' + d.troughDate + ' 低点') + '">' +
             ddDate(d.peakDate) + ' → ' + ddDate(d.troughDate) + '</span>'
+          : '—') + '</td>' +
+        '<td class="hd-num">' + (d.runLowDate
+          ? '<span title="' + esc(d.runLowDate + ' 低点 → ' + d.runHighDate + ' 高点') + '">' +
+            ddDate(d.runLowDate) + ' → ' + ddDate(d.runHighDate) + '</span>'
           : '—') + '</td>' +
         '<td class="hd-num' + (d.curDD > 0 ? ' down' : ' flat') + '">' +
           (d.curDD > 0 ? '-' : '') + ddPct(d.curDD) + '</td>' +
@@ -1255,24 +1310,33 @@
     }).join('');
 
     var head = '<tr><th>类别</th><th>基金名称</th><th class="hd-num">代码</th>' +
-      '<th class="hd-num">最大回撤</th><th class="hd-num">区间涨跌</th>' +
-      '<th class="hd-num">高 → 低</th><th class="hd-num">距峰值</th>' +
-      '<th class="hd-num">窗口起点</th></tr>';
+      '<th class="hd-num">最大跌幅</th><th class="hd-num">最大涨幅</th>' +
+      '<th class="hd-num">区间涨幅</th><th class="hd-num">区间跌幅</th>' +
+      '<th class="hd-num">高 → 低</th><th class="hd-num">低 → 高</th>' +
+      '<th class="hd-num">距峰值</th><th class="hd-num">窗口起点</th></tr>';
 
     el.innerHTML =
-      '<div class="hd-section">最近 ' + dd.days + ' 天 · ' + rows.length + ' 只 · 最深 ' +
-        esc(worst.r.name) + ' -' + ddPct(worst.d.mdd) + '</div>' +
+      '<div class="hd-section">最近 ' + dd.days + ' 天 · ' + rows.length + ' 只 · 跌最深 ' +
+        esc(worst.r.name) + ' -' + ddPct(worst.d.mdd) +
+        (best && best.d.mru > 0
+          ? ' · 涨最猛 ' + esc(best.r.name) + ' +' + ddPct(best.d.mru) : '') +
+        '</div>' +
       ddChart(rows) +
       '<div class="table-wrap"><table class="dd-table"><colgroup>' +
-        '<col style="width:88px"><col><col style="width:82px"><col style="width:82px">' +
-        '<col style="width:78px"><col style="width:116px"><col style="width:76px">' +
-        '<col style="width:72px"></colgroup>' +
+        '<col style="width:86px"><col><col style="width:78px">' +
+        '<col style="width:80px"><col style="width:80px">' +
+        '<col style="width:78px"><col style="width:78px">' +
+        '<col style="width:116px"><col style="width:116px">' +
+        '<col style="width:72px"><col style="width:70px"></colgroup>' +
         '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
       '<p class="hd-note">只看窗口内：<b>峰只取窗口里的点</b>，谷是峰之后的低点。' +
         '拿窗口之前的最高点来算，得出的其实是「从以前某个高点跌到今天跌了多少」，' +
         '窗口里明明在涨也会被标成深回撤。' +
-        '回撤按<b>复权净值</b>算（含分红再投）。「区间涨跌」是窗口首尾的涨跌幅，' +
-        '「最大回撤」「距峰值」是跌了多少——跌完又涨回来时，涨跌可能接近 0，回撤照样很深。' +
+        '「最大涨幅」是它的镜像：窗口里<b>先低后高</b>的那一段，低点在前、高点在后，' +
+        '不是把跌幅取个反——净涨 2% 的窗口里可能先跌 15% 再涨 17%，那才是真实走过的路。' +
+        '回撤和涨幅都按<b>复权净值</b>算（含分红再投）。' +
+        '「区间涨幅 / 区间跌幅」是窗口首尾的涨跌幅按方向拆成两列——净涨只填左边、净跌只填右边，' +
+        '另一边空着，扫一眼就知道方向；两列带符号相减就是净涨跌（鼠标停在那两格上也能看到）。' +
         '和上面「基金区间收益」的 1月 / 3月 / 6月 / 1年 差一点点是正常的：那几列按<b>日历月</b>回溯，' +
         '这里按<b>天数</b>回溯，起算点通常差一个交易日（每行最后一列就是这里的起算点）。' +
         ddAlignNote(rows) +
